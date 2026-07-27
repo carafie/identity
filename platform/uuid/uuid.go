@@ -21,7 +21,3 @@ func Parse(text string) (UUID, error) {
 	}
 	return id, nil
 }
-
-func MustParse(text string) UUID {
-	return uuid.MustParse(text)
-}
