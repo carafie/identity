@@ -2,12 +2,20 @@ package jwt
 
 import (
 	"crypto/ed25519"
+	"errors"
 	"fmt"
 
 	"github.com/carafie/identity/platform/email"
 	"github.com/carafie/identity/platform/uuid"
 	"github.com/golang-jwt/jwt/v5"
 )
+
+var (
+	errTokenNil             = errors.New("token is nil")
+	errUnexpectedClaimsType = errors.New("unexpected claims type")
+)
+
+type SignedToken = string
 
 type Manager struct {
 	publicKey  ed25519.PublicKey
@@ -16,6 +24,12 @@ type Manager struct {
 }
 
 func NewManager(publicKey ed25519.PublicKey, privateKey ed25519.PrivateKey) *Manager {
+	if publicKey == nil {
+		panic("public key cannot be nil")
+	}
+	if privateKey == nil {
+		panic("private key cannot be nil")
+	}
 	return &Manager{
 		publicKey:  publicKey,
 		privateKey: privateKey,
@@ -27,7 +41,10 @@ func NewManager(publicKey ed25519.PublicKey, privateKey ed25519.PrivateKey) *Man
 	}
 }
 
-func (m *Manager) New(token *Token) (string, error) {
+func (m *Manager) New(token *Token) (SignedToken, error) {
+	if token == nil {
+		return "", errTokenNil
+	}
 	claims := NewClaims(token)
 	signed, err := jwt.NewWithClaims(jwt.SigningMethodEdDSA, claims).SignedString(m.privateKey)
 	if err != nil {
@@ -36,7 +53,7 @@ func (m *Manager) New(token *Token) (string, error) {
 	return signed, nil
 }
 
-func (m *Manager) Parse(signedToken string) (*Token, error) {
+func (m *Manager) Parse(signedToken SignedToken) (*Token, error) {
 	parsed, err := m.parser.ParseWithClaims(
 		signedToken,
 		&Claims{},
@@ -49,7 +66,7 @@ func (m *Manager) Parse(signedToken string) (*Token, error) {
 	claims, ok := parsed.Claims.(*Claims)
 	if !ok {
 		// This should never happen.
-		return nil, fmt.Errorf("unexpected claims type")
+		return nil, errUnexpectedClaimsType
 	}
 
 	id, err := uuid.Parse(claims.ID)
