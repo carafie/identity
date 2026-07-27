@@ -36,9 +36,9 @@ func (m *Manager) New(token *Token) (string, error) {
 	return signed, nil
 }
 
-func (m *Manager) Parse(token string) (*Token, error) {
+func (m *Manager) Parse(signedToken string) (*Token, error) {
 	parsed, err := m.parser.ParseWithClaims(
-		token,
+		signedToken,
 		&Claims{},
 		func(t *jwt.Token) (any, error) { return m.publicKey, nil },
 	)
@@ -46,15 +46,27 @@ func (m *Manager) Parse(token string) (*Token, error) {
 		return nil, err
 	}
 
-	if claims, ok := parsed.Claims.(*Claims); ok && parsed.Valid {
-		return NewToken(
-			uuid.MustParse(claims.ID),
-			uuid.MustParse(claims.Subject),
-			email.Email(claims.Email),
-			Kind(claims.Kind),
-			claims.IssuedAt.Time,
-			claims.ExpiresAt.Time,
-		), nil
+	claims, ok := parsed.Claims.(*Claims)
+	if !ok {
+		// This should never happen.
+		return nil, fmt.Errorf("unexpected claims type")
 	}
-	return nil, fmt.Errorf("token is invalid")
+
+	id, err := uuid.Parse(claims.ID)
+	if err != nil {
+		return nil, err
+	}
+	userID, err := uuid.Parse(claims.Subject)
+	if err != nil {
+		return nil, err
+	}
+	em, err := email.Parse(claims.Email)
+	if err != nil {
+		return nil, err
+	}
+	kind, err := NewKind(claims.Kind)
+	if err != nil {
+		return nil, err
+	}
+	return NewToken(id, userID, em, kind, claims.IssuedAt.Time, claims.ExpiresAt.Time), nil
 }
