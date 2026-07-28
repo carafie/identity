@@ -8,7 +8,9 @@ import (
 	"github.com/carafie/identity/platform/uuid"
 )
 
-type Token struct {
+type SignedToken = string
+
+type TokenFields struct {
 	ID        uuid.UUID
 	UserID    uuid.UUID
 	Email     email.Email
@@ -17,11 +19,23 @@ type Token struct {
 	ExpiresAt time.Time
 }
 
-func NewToken(id, userID uuid.UUID, email email.Email, kind Kind, createdAt, expiresAt time.Time) *Token {
-	return &Token{
+func NewTokenFields(userID uuid.UUID, em email.Email, kind Kind, duration time.Duration) *TokenFields {
+	now := clock.Normalize(time.Now())
+	return &TokenFields{
+		ID:        uuid.New(),
+		UserID:    userID,
+		Email:     em,
+		Kind:      kind,
+		CreatedAt: now,
+		ExpiresAt: now.Add(duration),
+	}
+}
+
+func loadTokenFields(id, userID uuid.UUID, em email.Email, kind Kind, createdAt, expiresAt time.Time) *TokenFields {
+	return &TokenFields{
 		ID:        id,
 		UserID:    userID,
-		Email:     email,
+		Email:     em,
 		Kind:      kind,
 		CreatedAt: clock.Normalize(createdAt),
 		ExpiresAt: clock.Normalize(expiresAt),

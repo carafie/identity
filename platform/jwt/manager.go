@@ -2,20 +2,12 @@ package jwt
 
 import (
 	"crypto/ed25519"
-	"errors"
 	"fmt"
 
 	"github.com/carafie/identity/platform/email"
 	"github.com/carafie/identity/platform/uuid"
 	"github.com/golang-jwt/jwt/v5"
 )
-
-var (
-	errTokenNil             = errors.New("token is nil")
-	errUnexpectedClaimsType = errors.New("unexpected claims type")
-)
-
-type SignedToken = string
 
 type Manager struct {
 	publicKey  ed25519.PublicKey
@@ -41,32 +33,30 @@ func NewManager(publicKey ed25519.PublicKey, privateKey ed25519.PrivateKey) *Man
 	}
 }
 
-func (m *Manager) New(token *Token) (SignedToken, error) {
-	if token == nil {
-		return "", errTokenNil
-	}
-	claims := NewClaims(token)
-	signed, err := jwt.NewWithClaims(jwt.SigningMethodEdDSA, claims).SignedString(m.privateKey)
+func (m *Manager) Sign(fields *TokenFields) (SignedToken, error) {
+	claims := newClaims(fields)
+	token := jwt.NewWithClaims(jwt.SigningMethodEdDSA, claims)
+	signed, err := token.SignedString(m.privateKey)
 	if err != nil {
-		return "", fmt.Errorf("failed to sign: %w", err)
+		return "", err
 	}
 	return signed, nil
 }
 
-func (m *Manager) Parse(signedToken SignedToken) (*Token, error) {
-	parsed, err := m.parser.ParseWithClaims(
-		signedToken,
-		&Claims{},
+func (m *Manager) Parse(signed SignedToken) (*TokenFields, error) {
+	token, err := m.parser.ParseWithClaims(
+		signed,
+		&claims{},
 		func(t *jwt.Token) (any, error) { return m.publicKey, nil },
 	)
 	if err != nil {
 		return nil, err
 	}
 
-	claims, ok := parsed.Claims.(*Claims)
+	claims, ok := token.Claims.(*claims)
 	if !ok {
 		// This should never happen.
-		return nil, errUnexpectedClaimsType
+		return nil, fmt.Errorf("unexpected claims type: %T", token.Claims)
 	}
 
 	id, err := uuid.Parse(claims.ID)
@@ -81,9 +71,9 @@ func (m *Manager) Parse(signedToken SignedToken) (*Token, error) {
 	if err != nil {
 		return nil, err
 	}
-	kind, err := NewKind(claims.Kind)
+	kind, err := ParseKind(claims.Kind)
 	if err != nil {
 		return nil, err
 	}
-	return NewToken(id, userID, em, kind, claims.IssuedAt.Time, claims.ExpiresAt.Time), nil
+	return loadTokenFields(id, userID, em, kind, claims.IssuedAt.Time, claims.ExpiresAt.Time), nil
 }

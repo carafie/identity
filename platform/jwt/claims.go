@@ -2,21 +2,21 @@ package jwt
 
 import "github.com/golang-jwt/jwt/v5"
 
-type Claims struct {
-	Kind  int    `json:"kind"`
+type claims struct {
 	Email string `json:"email"`
+	Kind  int    `json:"kind"`
 	jwt.RegisteredClaims
 }
 
-func NewClaims(token *Token) *Claims {
-	return &Claims{
-		Email: string(token.Email),
-		Kind:  int(token.Kind),
+func newClaims(fields *TokenFields) *claims {
+	return &claims{
+		Email: string(fields.Email),
+		Kind:  int(fields.Kind),
 		RegisteredClaims: jwt.RegisteredClaims{
-			ID:        token.ID.String(),
-			Subject:   token.UserID.String(),
-			IssuedAt:  jwt.NewNumericDate(token.CreatedAt),
-			ExpiresAt: jwt.NewNumericDate(token.ExpiresAt),
+			ID:        fields.ID.String(),
+			Subject:   fields.UserID.String(),
+			IssuedAt:  jwt.NewNumericDate(fields.CreatedAt),
+			ExpiresAt: jwt.NewNumericDate(fields.ExpiresAt),
 		},
 	}
 }

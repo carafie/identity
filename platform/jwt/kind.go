@@ -12,7 +12,7 @@ const (
 	KindRefresh
 )
 
-func NewKind(kind int) (Kind, error) {
+func ParseKind(kind int) (Kind, error) {
 	switch kind {
 	case int(KindAccess):
 		return KindAccess, nil
