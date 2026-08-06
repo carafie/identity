@@ -19,6 +19,36 @@ type Service struct {
 	logger      *slog.Logger
 }
 
+type ServiceParams struct {
+	OTPStore    Store
+	OTPMailer   Mailer
+	OTPDuration time.Duration
+	Transactor  sqlx.Transactor
+	Logger      *slog.Logger
+}
+
+func NewService(params *ServiceParams) *Service {
+	if params.OTPStore == nil {
+		panic("otp store cannot be nil")
+	}
+	if params.OTPMailer == nil {
+		panic("otp mailer cannot be nil")
+	}
+	if params.Transactor == nil {
+		panic("transactor cannot be nil")
+	}
+	if params.Logger == nil {
+		params.Logger = slog.New(slog.DiscardHandler)
+	}
+	return &Service{
+		otpStore:    params.OTPStore,
+		otpMailer:   params.OTPMailer,
+		otpDuration: params.OTPDuration,
+		transactor:  params.Transactor,
+		logger:      params.Logger,
+	}
+}
+
 func (s *Service) Request(ctx context.Context, email string) (*OTP, error) {
 	l := s.logger.With(slogx.RequestID(requestid.FromContext(ctx)))
 
