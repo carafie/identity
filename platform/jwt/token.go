@@ -4,7 +4,7 @@ import (
 	"time"
 
 	"github.com/carafie/identity/platform/clock"
-	"github.com/carafie/identity/platform/email"
+	"github.com/carafie/identity/platform/mail"
 	"github.com/carafie/identity/platform/uuid"
 )
 
@@ -13,29 +13,29 @@ type SignedToken = string
 type TokenFields struct {
 	ID        uuid.UUID
 	UserID    uuid.UUID
-	Email     email.Email
+	Email     mail.Email
 	Kind      Kind
 	CreatedAt time.Time
 	ExpiresAt time.Time
 }
 
-func NewTokenFields(userID uuid.UUID, em email.Email, kind Kind, duration time.Duration) *TokenFields {
+func NewTokenFields(userID uuid.UUID, email mail.Email, kind Kind, duration time.Duration) *TokenFields {
 	now := clock.Normalize(time.Now())
 	return &TokenFields{
 		ID:        uuid.New(),
 		UserID:    userID,
-		Email:     em,
+		Email:     email,
 		Kind:      kind,
 		CreatedAt: now,
 		ExpiresAt: now.Add(duration),
 	}
 }
 
-func loadTokenFields(id, userID uuid.UUID, em email.Email, kind Kind, createdAt, expiresAt time.Time) *TokenFields {
+func loadTokenFields(id, userID uuid.UUID, email mail.Email, kind Kind, createdAt, expiresAt time.Time) *TokenFields {
 	return &TokenFields{
 		ID:        id,
 		UserID:    userID,
-		Email:     em,
+		Email:     email,
 		Kind:      kind,
 		CreatedAt: clock.Normalize(createdAt),
 		ExpiresAt: clock.Normalize(expiresAt),

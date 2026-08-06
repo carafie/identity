@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/carafie/identity/platform/email"
+	"github.com/carafie/identity/platform/mail"
 	"github.com/carafie/identity/platform/uuid"
 	"github.com/google/go-cmp/cmp"
 )
@@ -21,7 +21,7 @@ func TestManager_SignAndParse(t *testing.T) {
 		return NewManager(publicKey, privateKey)
 	}
 
-	em, err := email.Parse("jwt@test")
+	email, err := mail.Parse("jwt@test")
 	if err != nil {
 		t.Fatalf("failed to parse email: %v", err)
 	}
@@ -30,7 +30,7 @@ func TestManager_SignAndParse(t *testing.T) {
 		manager1 := newManager(t)
 		manager2 := newManager(t)
 
-		fields := NewTokenFields(uuid.New(), em, KindRefresh, time.Hour)
+		fields := NewTokenFields(uuid.New(), email, KindRefresh, time.Hour)
 		signed, err := manager1.Sign(fields)
 		if err != nil {
 			t.Fatalf("failed to sign token: %v", err)
@@ -44,7 +44,7 @@ func TestManager_SignAndParse(t *testing.T) {
 	t.Run("token expired", func(t *testing.T) {
 		manager := newManager(t)
 
-		fields := NewTokenFields(uuid.New(), em, KindRefresh, -time.Hour)
+		fields := NewTokenFields(uuid.New(), email, KindRefresh, -time.Hour)
 		signed, err := manager.Sign(fields)
 		if err != nil {
 			t.Fatalf("failed to sign token: %v", err)
@@ -58,7 +58,7 @@ func TestManager_SignAndParse(t *testing.T) {
 	t.Run("success", func(t *testing.T) {
 		manager := newManager(t)
 
-		fields := NewTokenFields(uuid.New(), em, KindRefresh, time.Hour)
+		fields := NewTokenFields(uuid.New(), email, KindRefresh, time.Hour)
 		signed, err := manager.Sign(fields)
 		if err != nil {
 			t.Fatalf("failed to sign token: %v", err)

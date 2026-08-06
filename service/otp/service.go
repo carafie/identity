@@ -5,7 +5,7 @@ import (
 	"log/slog"
 	"time"
 
-	"github.com/carafie/identity/platform/email"
+	"github.com/carafie/identity/platform/mail"
 	"github.com/carafie/identity/platform/requestid"
 	"github.com/carafie/identity/platform/slogx"
 	"github.com/carafie/identity/platform/sqlx"
@@ -19,15 +19,15 @@ type Service struct {
 	logger      *slog.Logger
 }
 
-func (s *Service) Request(ctx context.Context, emailAddress string) (*OTP, error) {
+func (s *Service) Request(ctx context.Context, email string) (*OTP, error) {
 	l := s.logger.With(slogx.RequestID(requestid.FromContext(ctx)))
 
-	em, err := email.Parse(emailAddress)
+	parsedEmail, err := mail.Parse(email)
 	if err != nil {
 		l.WarnContext(ctx, "parse email", slogx.Error(err))
 		return nil, err
 	}
-	otp := New(em, s.otpDuration)
+	otp := New(parsedEmail, s.otpDuration)
 
 	l = s.logger.With(slogx.OTPID(otp.ID.String()))
 

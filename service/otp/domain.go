@@ -7,24 +7,24 @@ import (
 	"time"
 
 	"github.com/carafie/identity/platform/clock"
-	"github.com/carafie/identity/platform/email"
+	"github.com/carafie/identity/platform/mail"
 	"github.com/carafie/identity/platform/uuid"
 )
 
 type OTP struct {
 	ID        uuid.UUID
-	Email     email.Email
+	Email     mail.Email
 	Code      Code
 	Attempts  int
 	CreatedAt time.Time
 	ExpiresAt time.Time
 }
 
-func New(em email.Email, duration time.Duration) *OTP {
+func New(email mail.Email, duration time.Duration) *OTP {
 	now := clock.Normalize(time.Now())
 	return &OTP{
 		ID:        uuid.New(),
-		Email:     em,
+		Email:     email,
 		Code:      NewCode(),
 		Attempts:  0,
 		CreatedAt: now,

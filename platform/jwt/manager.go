@@ -4,7 +4,7 @@ import (
 	"crypto/ed25519"
 	"fmt"
 
-	"github.com/carafie/identity/platform/email"
+	"github.com/carafie/identity/platform/mail"
 	"github.com/carafie/identity/platform/uuid"
 	"github.com/golang-jwt/jwt/v5"
 )
@@ -67,7 +67,7 @@ func (m *Manager) Parse(signed SignedToken) (*TokenFields, error) {
 	if err != nil {
 		return nil, err
 	}
-	em, err := email.Parse(claims.Email)
+	email, err := mail.Parse(claims.Email)
 	if err != nil {
 		return nil, err
 	}
@@ -75,5 +75,5 @@ func (m *Manager) Parse(signed SignedToken) (*TokenFields, error) {
 	if err != nil {
 		return nil, err
 	}
-	return loadTokenFields(id, userID, em, kind, claims.IssuedAt.Time, claims.ExpiresAt.Time), nil
+	return loadTokenFields(id, userID, email, kind, claims.IssuedAt.Time, claims.ExpiresAt.Time), nil
 }

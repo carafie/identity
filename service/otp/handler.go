@@ -6,8 +6,8 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/carafie/identity/platform/email"
 	"github.com/carafie/identity/platform/httpx"
+	"github.com/carafie/identity/platform/mail"
 	"github.com/carafie/identity/platform/requestid"
 )
 
@@ -34,7 +34,7 @@ func (h *Handler) Request(w http.ResponseWriter, r *http.Request) httpx.Response
 
 	otp, err := h.service.Request(r.Context(), params.Email)
 	if err != nil {
-		if errors.Is(err, email.ErrInvalid) {
+		if errors.Is(err, mail.ErrInvalid) {
 			return httpx.Response{StatusCode: http.StatusUnprocessableEntity, RequestID: requestID}
 		}
 		return httpx.Response{StatusCode: http.StatusInternalServerError, RequestID: requestID}
