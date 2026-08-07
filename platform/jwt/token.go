@@ -8,7 +8,11 @@ import (
 	"github.com/carafie/identity/platform/uuid"
 )
 
-type SignedToken = string
+type (
+	SignedToken  = string
+	AccessToken  = SignedToken
+	RefreshToken = SignedToken
+)
 
 type TokenFields struct {
 	ID        uuid.UUID
