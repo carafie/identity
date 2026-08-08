@@ -23,6 +23,6 @@ func RequestID(id uuid.UUID) slog.Attr {
 	return slog.String(requestIDKey, id.String())
 }
 
-func OTPID(id string) slog.Attr {
-	return slog.String(otpIDKey, id)
+func OTPID(id uuid.UUID) slog.Attr {
+	return slog.String(otpIDKey, id.String())
 }
