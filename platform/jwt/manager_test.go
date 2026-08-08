@@ -31,11 +31,11 @@ func TestManager_SignAndParse(t *testing.T) {
 		manager2 := newManager(t)
 
 		fields := NewTokenFields(uuid.New(), email, KindRefresh, time.Hour)
-		signed, err := manager1.Sign(fields)
+		token, err := manager1.Sign(fields)
 		if err != nil {
 			t.Fatalf("failed to sign token: %v", err)
 		}
-		_, err = manager2.Parse(signed)
+		_, err = manager2.Parse(token.JWS)
 		if err == nil {
 			t.Error("parsing token with different key pair should fail")
 		}
@@ -45,11 +45,11 @@ func TestManager_SignAndParse(t *testing.T) {
 		manager := newManager(t)
 
 		fields := NewTokenFields(uuid.New(), email, KindRefresh, -time.Hour)
-		signed, err := manager.Sign(fields)
+		token, err := manager.Sign(fields)
 		if err != nil {
 			t.Fatalf("failed to sign token: %v", err)
 		}
-		_, err = manager.Parse(signed)
+		_, err = manager.Parse(token.JWS)
 		if err == nil {
 			t.Error("parsing expired token should fail")
 		}
@@ -59,15 +59,15 @@ func TestManager_SignAndParse(t *testing.T) {
 		manager := newManager(t)
 
 		fields := NewTokenFields(uuid.New(), email, KindRefresh, time.Hour)
-		signed, err := manager.Sign(fields)
+		token, err := manager.Sign(fields)
 		if err != nil {
 			t.Fatalf("failed to sign token: %v", err)
 		}
-		gotFields, err := manager.Parse(signed)
+		gotToken, err := manager.Parse(token.JWS)
 		if err != nil {
 			t.Fatalf("failed to parse token: %v", err)
 		}
-		if diff := cmp.Diff(fields, gotFields); diff != "" {
+		if diff := cmp.Diff(fields, gotToken.Fields); diff != "" {
 			t.Errorf("(-want +got):\n%s", diff)
 		}
 	})

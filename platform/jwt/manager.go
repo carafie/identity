@@ -33,19 +33,19 @@ func NewManager(publicKey ed25519.PublicKey, privateKey ed25519.PrivateKey) *Man
 	}
 }
 
-func (m *Manager) Sign(fields *TokenFields) (SignedToken, error) {
+func (m *Manager) Sign(fields *TokenFields) (*Token, error) {
 	claims := newClaims(fields)
 	token := jwt.NewWithClaims(jwt.SigningMethodEdDSA, claims)
 	signed, err := token.SignedString(m.privateKey)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
-	return signed, nil
+	return newToken(fields, signed), nil
 }
 
-func (m *Manager) Parse(signed SignedToken) (*TokenFields, error) {
+func (m *Manager) Parse(jws JWS) (*Token, error) {
 	token, err := m.parser.ParseWithClaims(
-		signed,
+		jws,
 		&claims{},
 		func(t *jwt.Token) (any, error) { return m.publicKey, nil },
 	)
@@ -75,5 +75,8 @@ func (m *Manager) Parse(signed SignedToken) (*TokenFields, error) {
 	if err != nil {
 		return nil, err
 	}
-	return loadTokenFields(id, userID, email, kind, claims.IssuedAt.Time, claims.ExpiresAt.Time), nil
+	return newToken(
+		loadTokenFields(id, userID, email, kind, claims.IssuedAt.Time, claims.ExpiresAt.Time),
+		jws,
+	), nil
 }

@@ -8,11 +8,21 @@ import (
 	"github.com/carafie/identity/platform/uuid"
 )
 
-type (
-	SignedToken  = string
-	AccessToken  = SignedToken
-	RefreshToken = SignedToken
-)
+type JWS = string
+
+type Token struct {
+	Fields *TokenFields
+
+	// JWS is the JSON Web Signature, commonly referred to as the signed string.
+	JWS JWS
+}
+
+func newToken(fields *TokenFields, jws JWS) *Token {
+	return &Token{
+		Fields: fields,
+		JWS:    jws,
+	}
+}
 
 type TokenFields struct {
 	ID        uuid.UUID
