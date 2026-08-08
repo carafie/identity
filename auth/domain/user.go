@@ -16,3 +16,10 @@ func NewUser(email mail.Email) *User {
 		Email: email,
 	}
 }
+
+func LoadUser(id uuid.UUID, email mail.Email) *User {
+	return &User{
+		ID:    id,
+		Email: email,
+	}
+}

@@ -28,7 +28,9 @@ type testStore struct {
 	getUserByEmailOrCreate    *domain.User
 	getUserByEmailOrCreateErr error
 
-	createRefreshTokenErr error
+	createRefreshTokenErr  error
+	refreshTokenRevoked    bool
+	refreshTokenRevokedErr error
 }
 
 func (s testStore) CreateOTP(ctx context.Context, executor sqlx.Executor, otp *domain.OTP) error {
@@ -47,6 +49,10 @@ func (s testStore) GetUserByEmailOrCreate(
 
 func (s testStore) CreateRefreshToken(ctx context.Context, executor sqlx.Executor, token *domain.RefreshToken) error {
 	return s.createRefreshTokenErr
+}
+
+func (s testStore) RefreshTokenRevoked(ctx context.Context, executor sqlx.Executor, tokenID uuid.UUID) (bool, error) {
+	return s.refreshTokenRevoked, s.refreshTokenRevokedErr
 }
 
 var _ store.Store = testStore{}
@@ -283,6 +289,97 @@ func TestService_ConfirmOTP(t *testing.T) {
 				t.Errorf(
 					"Service.Confirm(..., ..., %q), gotErr=%q, wantErr=%q",
 					test.code, gotErr, test.wantErr,
+				)
+			}
+		})
+	}
+}
+
+func TestService_RefreshAccessToken(t *testing.T) {
+	tokenManager := testJWTManager(t)
+	user := domain.NewUser("token@test")
+
+	refreshToken, err := tokenManager.Sign(
+		jwt.NewTokenFields(user.ID, user.Email, jwt.KindRefresh, time.Hour),
+	)
+	if err != nil {
+		t.Fatalf("failed to sign token: %v", err)
+	}
+	expiredRefreshToken, err := tokenManager.Sign(
+		jwt.NewTokenFields(user.ID, user.Email, jwt.KindRefresh, -time.Hour),
+	)
+	if err != nil {
+		t.Fatalf("failed to sign token: %v", err)
+	}
+
+	tests := map[string]struct {
+		store      store.Store
+		transactor sqlx.Transactor
+		refreshJWS string
+		wantErr    error
+	}{
+		"invalid refresh jws": {
+			store:      testStore{},
+			transactor: testTransactor{},
+			refreshJWS: "invalid",
+			wantErr:    domain.ErrTokenInvalid,
+		},
+		"expired refresh token": {
+			store:      testStore{},
+			transactor: testTransactor{},
+			refreshJWS: expiredRefreshToken.JWS,
+			wantErr:    domain.ErrTokenInvalid,
+		},
+		"transactor single error": {
+			store:      testStore{},
+			transactor: testTransactor{singleErr: errTest},
+			refreshJWS: refreshToken.JWS,
+			wantErr:    errTest,
+		},
+		"store refresh token revoked error": {
+			store:      testStore{refreshTokenRevokedErr: errTest},
+			transactor: testTransactor{},
+			refreshJWS: refreshToken.JWS,
+			wantErr:    errTest,
+		},
+		"store refresh token revoked not found error": {
+			store:      testStore{refreshTokenRevokedErr: sqlx.ErrNotFound},
+			transactor: testTransactor{},
+			refreshJWS: refreshToken.JWS,
+			wantErr:    domain.ErrTokenExpired,
+		},
+		"revoked refresh token": {
+			store:      testStore{refreshTokenRevoked: true},
+			transactor: testTransactor{},
+			refreshJWS: refreshToken.JWS,
+			wantErr:    domain.ErrTokenRevoked,
+		},
+		"success": {
+			store:      testStore{},
+			transactor: testTransactor{},
+			refreshJWS: refreshToken.JWS,
+			wantErr:    nil,
+		},
+	}
+
+	for name, test := range tests {
+		t.Run(name, func(t *testing.T) {
+			service := New(&Params{
+				Store:                test.store,
+				Mailer:               testMailer{},
+				OTPDuration:          15 * time.Minute,
+				OTPMaxAttempts:       3,
+				TokenManager:         tokenManager,
+				TokenAccessDuration:  1 * time.Hour,
+				TokenRefreshDuration: 90 * 24 * time.Hour,
+				Transactor:           test.transactor,
+				Logger:               slog.New(slog.NewJSONHandler(t.Output(), nil)),
+			})
+			_, gotErr := service.RefreshAccessToken(t.Context(), test.refreshJWS)
+			if !errors.Is(gotErr, test.wantErr) {
+				t.Errorf(
+					"Service.RefreshAccessToken(...), gotErr=%q, wantErr=%q",
+					gotErr, test.wantErr,
 				)
 			}
 		})

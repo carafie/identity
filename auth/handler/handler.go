@@ -89,3 +89,33 @@ func (h *Handler) ConfirmOTP(w http.ResponseWriter, r *http.Request) httpx.Respo
 		Body:       confirmOTPResponse{AccessToken: access.JWS},
 	}
 }
+
+type refreshAccessTokenResponse struct {
+	AccessToken string `json:"access_token"`
+}
+
+func (h *Handler) RefreshAccessToken(w http.ResponseWriter, r *http.Request) httpx.Response {
+	requestID := requestid.FromContext(r.Context())
+
+	refreshCookie, err := GetRefreshCookie(r)
+	if err != nil {
+		return httpx.Response{StatusCode: http.StatusUnauthorized, RequestID: requestID}
+	}
+
+	access, err := h.service.RefreshAccessToken(r.Context(), refreshCookie.Value)
+	if err != nil {
+		statusCode := http.StatusInternalServerError
+		if errors.Is(err, domain.ErrTokenInvalid) ||
+			errors.Is(err, domain.ErrTokenExpired) ||
+			errors.Is(err, domain.ErrTokenRevoked) {
+			statusCode = http.StatusUnauthorized
+		}
+		return httpx.Response{StatusCode: statusCode, RequestID: requestID}
+	}
+
+	return httpx.Response{
+		StatusCode: http.StatusCreated,
+		RequestID:  requestID,
+		Body:       refreshAccessTokenResponse{AccessToken: access.JWS},
+	}
+}

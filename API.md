@@ -2,6 +2,7 @@
 
 - [`POST` `/auth/otps`](#post-authotps)
 - [`POST` `/auth/otps/{id}`](#post-authotpsid)
+- [`POST` `/auth/tokens/refresh`](#post-authtokensrefresh)
 
 <br><br>
 
@@ -58,7 +59,7 @@ Content-Type: application/json
 ```http
 HTTP/1.1 201 Created
 Content-Type: application/json
-Set-Cookie: refresh_token=ey...; Path=/auth/tokens/refresh; Max-Age=7776000; Secure; HttpOnly; SameSite=Lax
+Set-Cookie: refresh_token=ey...; Path=/auth/tokens/refresh; ...
 ```
 
 ```json
@@ -72,3 +73,32 @@ Set-Cookie: refresh_token=ey...; Path=/auth/tokens/refresh; Max-Age=7776000; Sec
 | Unexpected request format                        | 400 Bad Request           |
 | Invalid id or code, or mismatched code           | 422 Unprocessable Content |
 | Code not found, expired, or max attempts reached | 404 Not Found             |
+
+<br><br>
+
+### `POST` `/auth/tokens/refresh`
+
+Refreshes an access token.
+
+#### Request:
+
+```http
+Cookie: refresh_token=ey...; ...
+```
+
+#### Response:
+
+```http
+HTTP/1.1 201 Created
+Content-Type: application/json
+```
+
+```json
+{ "access_token": "ey..." }
+```
+
+#### Errors:
+
+| Cause                                      | Status Code      |
+| ------------------------------------------ | ---------------- |
+| Invalid, expired, or revoked refresh token | 401 Unauthorized |

@@ -151,9 +151,14 @@ func (s *Service) ConfirmOTP(ctx context.Context, otpID, code string) (*domain.A
 			return sqlx.Rollback, err
 		}
 
-		innerAccess, innerRefresh, err := s.issueTokens(user)
+		innerAccess, err := s.issueAccessToken(user)
 		if err != nil {
-			l.ErrorContext(ctx, "issue tokens", slogx.Error(err))
+			l.ErrorContext(ctx, "issue access token", slogx.Error(err))
+			return sqlx.Rollback, err
+		}
+		innerRefresh, err := s.issueRefreshToken(user)
+		if err != nil {
+			l.ErrorContext(ctx, "issue refresh token", slogx.Error(err))
 			return sqlx.Rollback, err
 		}
 		if err := s.store.CreateRefreshToken(ctx, executor, innerRefresh); err != nil {
@@ -168,18 +173,47 @@ func (s *Service) ConfirmOTP(ctx context.Context, otpID, code string) (*domain.A
 	return access, refresh, err
 }
 
-func (s *Service) issueTokens(user *domain.User) (*domain.AccessToken, *domain.RefreshToken, error) {
-	access, err := s.tokenManager.Sign(
+func (s *Service) issueAccessToken(user *domain.User) (*domain.AccessToken, error) {
+	return s.tokenManager.Sign(
 		jwt.NewTokenFields(user.ID, user.Email, jwt.KindAccess, s.tokenAccessDuration),
 	)
-	if err != nil {
-		return nil, nil, err
-	}
-	refresh, err := s.tokenManager.Sign(
+}
+
+func (s *Service) issueRefreshToken(user *domain.User) (*domain.AccessToken, error) {
+	return s.tokenManager.Sign(
 		jwt.NewTokenFields(user.ID, user.Email, jwt.KindRefresh, s.tokenRefreshDuration),
 	)
+}
+
+func (s *Service) RefreshAccessToken(ctx context.Context, refreshJWS string) (*domain.AccessToken, error) {
+	l := s.logger.With(slogx.RequestID(requestid.FromContext(ctx)))
+
+	refreshToken, err := s.tokenManager.Parse(refreshJWS) // expired tokens fail as well
 	if err != nil {
-		return nil, nil, err
+		l.WarnContext(ctx, "parse refresh token", slogx.Error(err))
+		return nil, domain.ErrTokenInvalid
 	}
-	return access, refresh, nil
+
+	var tokenRevoked bool
+	err = s.transactor.Single(ctx, func(ctx context.Context, executor sqlx.Executor) error {
+		revoked, err := s.store.RefreshTokenRevoked(ctx, executor, refreshToken.Fields.ID)
+		if err != nil {
+			if errors.Is(err, sqlx.ErrNotFound) {
+				l.WarnContext(ctx, "is refresh token revoked", slogx.Error(err))
+				return domain.ErrTokenExpired
+			}
+			l.ErrorContext(ctx, "is refresh token revoked", slogx.Error(err))
+			return err
+		}
+		tokenRevoked = revoked
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	if tokenRevoked {
+		return nil, domain.ErrTokenRevoked
+	}
+
+	return s.issueAccessToken(domain.LoadUser(refreshToken.Fields.UserID, refreshToken.Fields.Email))
 }

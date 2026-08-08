@@ -11,10 +11,14 @@ func SetRefreshCookie(w http.ResponseWriter, token *domain.RefreshToken) {
 	http.SetCookie(w, &http.Cookie{
 		Name:     "refresh_token",
 		Value:    token.JWS,
-		Path:     "/auth/token/refresh",
+		Path:     "/auth/tokens/refresh",
 		MaxAge:   clock.SecondsUntil(token.Fields.ExpiresAt),
 		Secure:   true,
 		HttpOnly: true,
 		SameSite: http.SameSiteLaxMode,
 	})
+}
+
+func GetRefreshCookie(r *http.Request) (*http.Cookie, error) {
+	return r.Cookie("refresh_token")
 }
