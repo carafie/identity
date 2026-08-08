@@ -1,4 +1,4 @@
-package otp
+package domain
 
 import (
 	"crypto/rand"
@@ -12,7 +12,11 @@ import (
 	"github.com/carafie/identity/platform/uuid"
 )
 
-var ErrCodeInvalid = errors.New("code is invalid")
+var (
+	ErrCodeInvalid    = errors.New("code is invalid")
+	ErrCodeExpired    = errors.New("code is expired")
+	ErrCodeMismatched = errors.New("code is mismatched")
+)
 
 type OTP struct {
 	ID        uuid.UUID
@@ -23,7 +27,7 @@ type OTP struct {
 	ExpiresAt time.Time
 }
 
-func New(email mail.Email, duration time.Duration) *OTP {
+func NewOTP(email mail.Email, duration time.Duration) *OTP {
 	now := clock.Normalize(time.Now())
 	return &OTP{
 		ID:        uuid.New(),
@@ -36,20 +40,16 @@ func New(email mail.Email, duration time.Duration) *OTP {
 }
 
 func (otp *OTP) Validate(code Code, maxAttempts int) error {
-	if otp == nil || otp.Expired() {
+	if otp == nil || clock.InPast(otp.ExpiresAt) {
 		return ErrCodeExpired
 	}
 	if otp.Attempts >= maxAttempts {
 		return ErrCodeExpired
 	}
 	if otp.Code != code {
-		return ErrCodeMismatch
+		return ErrCodeMismatched
 	}
 	return nil
-}
-
-func (otp *OTP) Expired() bool {
-	return otp.ExpiresAt.Before(clock.Normalize(time.Now()))
 }
 
 type Code string
@@ -58,6 +58,7 @@ func NewCode() Code {
 	max := big.NewInt(1000000)
 	n, err := rand.Int(rand.Reader, max)
 	if err != nil {
+		// This should never happen.
 		panic(fmt.Errorf("failed to generate random code: %w", err))
 	}
 	return Code(fmt.Sprintf("%06d", n.Int64()))

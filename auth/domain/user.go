@@ -1,4 +1,4 @@
-package user
+package domain
 
 import (
 	"github.com/carafie/identity/platform/mail"
@@ -10,7 +10,7 @@ type User struct {
 	Email mail.Email
 }
 
-func New(email mail.Email) *User {
+func NewUser(email mail.Email) *User {
 	return &User{
 		ID:    uuid.New(),
 		Email: email,

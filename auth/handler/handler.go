@@ -1,4 +1,4 @@
-package otp
+package handler
 
 import (
 	"encoding/json"
@@ -6,35 +6,36 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/carafie/identity/auth/domain"
+	"github.com/carafie/identity/auth/service"
 	"github.com/carafie/identity/platform/httpx"
 	"github.com/carafie/identity/platform/mail"
 	"github.com/carafie/identity/platform/requestid"
 	"github.com/carafie/identity/platform/uuid"
-	"github.com/carafie/identity/service/token"
 )
 
 type Handler struct {
-	service *Service
+	service *service.Service
 }
 
-type requestParams struct {
+type requestOTPParams struct {
 	Email string `json:"email"`
 }
 
-type requestResponse struct {
+type requestOTPResponse struct {
 	ID        string    `json:"id"`
 	ExpiresAt time.Time `json:"expires_at"`
 }
 
-func (h *Handler) Request(w http.ResponseWriter, r *http.Request) httpx.Response {
+func (h *Handler) RequestOTP(w http.ResponseWriter, r *http.Request) httpx.Response {
 	requestID := requestid.FromContext(r.Context())
 
-	var params requestParams
+	var params requestOTPParams
 	if err := json.NewDecoder(r.Body).Decode(&params); err != nil {
 		return httpx.Response{StatusCode: http.StatusBadRequest, RequestID: requestID}
 	}
 
-	otp, err := h.service.Request(r.Context(), params.Email)
+	otp, err := h.service.RequestOTP(r.Context(), params.Email)
 	if err != nil {
 		if errors.Is(err, mail.ErrInvalid) {
 			return httpx.Response{StatusCode: http.StatusUnprocessableEntity, RequestID: requestID}
@@ -45,46 +46,46 @@ func (h *Handler) Request(w http.ResponseWriter, r *http.Request) httpx.Response
 	return httpx.Response{
 		StatusCode: http.StatusCreated,
 		RequestID:  requestID,
-		Body:       requestResponse{ID: otp.ID.String(), ExpiresAt: otp.ExpiresAt},
+		Body:       requestOTPResponse{ID: otp.ID.String(), ExpiresAt: otp.ExpiresAt},
 	}
 }
 
-type confirmParams struct {
+type confirmOTPParams struct {
 	Code string `json:"code"`
 }
 
-type confirmResponse struct {
+type confirmOTPResponse struct {
 	AccessToken string `json:"access_token"`
 }
 
-func (h *Handler) Confirm(w http.ResponseWriter, r *http.Request) httpx.Response {
+func (h *Handler) ConfirmOTP(w http.ResponseWriter, r *http.Request) httpx.Response {
 	requestID := requestid.FromContext(r.Context())
 
 	otpID := r.PathValue("id")
 
-	var params confirmParams
+	var params confirmOTPParams
 	if err := json.NewDecoder(r.Body).Decode(&params); err != nil {
 		return httpx.Response{StatusCode: http.StatusBadRequest, RequestID: requestID}
 	}
 
-	access, refresh, err := h.service.Confirm(r.Context(), otpID, params.Code)
+	access, refresh, err := h.service.ConfirmOTP(r.Context(), otpID, params.Code)
 	if err != nil {
 		statusCode := http.StatusInternalServerError
 		switch {
 		case errors.Is(err, uuid.ErrInvalid),
-			errors.Is(err, ErrCodeInvalid),
-			errors.Is(err, ErrCodeMismatch):
+			errors.Is(err, domain.ErrCodeInvalid),
+			errors.Is(err, domain.ErrCodeMismatched):
 			statusCode = http.StatusUnprocessableEntity
-		case errors.Is(err, ErrCodeExpired):
+		case errors.Is(err, domain.ErrCodeExpired):
 			statusCode = http.StatusNotFound
 		}
 		return httpx.Response{StatusCode: statusCode, RequestID: requestID}
 	}
 
-	token.SetRefreshCookie(w, refresh)
+	SetRefreshCookie(w, refresh)
 	return httpx.Response{
 		StatusCode: http.StatusCreated,
 		RequestID:  requestID,
-		Body:       confirmResponse{AccessToken: access},
+		Body:       confirmOTPResponse{AccessToken: access.JWS},
 	}
 }
