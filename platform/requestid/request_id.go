@@ -1,18 +1,18 @@
 package requestid
 
-import "context"
+import (
+	"context"
+
+	"github.com/carafie/identity/platform/uuid"
+)
 
 type ctxKey int
 
 var key ctxKey
 
-func NewContext(ctx context.Context, id string) context.Context {
-	return context.WithValue(ctx, key, id)
-}
-
-func FromContext(ctx context.Context) string {
-	if id, ok := ctx.Value(key).(string); ok {
+func FromContext(ctx context.Context) uuid.UUID {
+	if id, ok := ctx.Value(key).(uuid.UUID); ok {
 		return id
 	}
-	return ""
+	return uuid.UUID{}
 }

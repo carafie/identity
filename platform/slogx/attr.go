@@ -1,6 +1,10 @@
 package slogx
 
-import "log/slog"
+import (
+	"log/slog"
+
+	"github.com/carafie/identity/platform/uuid"
+)
 
 const (
 	errorKey     = "error"
@@ -15,8 +19,8 @@ func Error(err error) slog.Attr {
 	return slog.Attr{}
 }
 
-func RequestID(id string) slog.Attr {
-	return slog.String(requestIDKey, id)
+func RequestID(id uuid.UUID) slog.Attr {
+	return slog.String(requestIDKey, id.String())
 }
 
 func OTPID(id string) slog.Attr {
