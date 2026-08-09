@@ -68,11 +68,11 @@ Set-Cookie: refresh_token=ey...; Path=/auth/tokens/refresh; ...
 
 #### Errors:
 
-| Cause                                            | Status Code               |
-| ------------------------------------------------ | ------------------------- |
-| Unexpected request format                        | 400 Bad Request           |
-| Invalid id or code, or mismatched code           | 422 Unprocessable Content |
-| Code not found, expired, or max attempts reached | 404 Not Found             |
+| Cause                                              | Status Code               |
+| -------------------------------------------------- | ------------------------- |
+| Unexpected request format                          | 400 Bad Request           |
+| Invalid id or code, or mismatched code             | 422 Unprocessable Content |
+| Not found or expired code, or max attempts reached | 404 Not Found             |
 
 <br><br>
 

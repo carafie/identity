@@ -173,18 +173,6 @@ func (s *Service) ConfirmOTP(ctx context.Context, otpID, code string) (*domain.A
 	return access, refresh, err
 }
 
-func (s *Service) issueAccessToken(user *domain.User) (*domain.AccessToken, error) {
-	return s.tokenManager.Sign(
-		jwt.NewTokenFields(user.ID, user.Email, jwt.KindAccess, s.tokenAccessDuration),
-	)
-}
-
-func (s *Service) issueRefreshToken(user *domain.User) (*domain.AccessToken, error) {
-	return s.tokenManager.Sign(
-		jwt.NewTokenFields(user.ID, user.Email, jwt.KindRefresh, s.tokenRefreshDuration),
-	)
-}
-
 func (s *Service) RefreshAccessToken(ctx context.Context, refreshJWS string) (*domain.AccessToken, error) {
 	l := s.logger.With(slogx.RequestID(requestid.FromContext(ctx)))
 
@@ -216,4 +204,16 @@ func (s *Service) RefreshAccessToken(ctx context.Context, refreshJWS string) (*d
 	}
 
 	return s.issueAccessToken(domain.LoadUser(refreshToken.Fields.UserID, refreshToken.Fields.Email))
+}
+
+func (s *Service) issueAccessToken(user *domain.User) (*domain.AccessToken, error) {
+	return s.tokenManager.Sign(
+		jwt.NewTokenFields(user.ID, user.Email, jwt.KindAccess, s.tokenAccessDuration),
+	)
+}
+
+func (s *Service) issueRefreshToken(user *domain.User) (*domain.AccessToken, error) {
+	return s.tokenManager.Sign(
+		jwt.NewTokenFields(user.ID, user.Email, jwt.KindRefresh, s.tokenRefreshDuration),
+	)
 }
