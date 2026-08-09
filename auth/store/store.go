@@ -15,5 +15,6 @@ type Store interface {
 	GetUserByEmailOrCreate(ctx context.Context, executor sqlx.Executor, user *domain.User) (*domain.User, error)
 
 	CreateRefreshToken(ctx context.Context, executor sqlx.Executor, token *domain.RefreshToken) error
+	ListRefreshTokens(ctx context.Context, executor sqlx.Executor, userID uuid.UUID) ([]*domain.RefreshTokenFields, error)
 	RefreshTokenRevoked(ctx context.Context, executor sqlx.Executor, tokenID uuid.UUID) (bool, error)
 }

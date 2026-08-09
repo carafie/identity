@@ -210,6 +210,32 @@ func (s *Service) RefreshAccessToken(ctx context.Context, refreshJWS string) (*d
 	return s.issueAccessToken(domain.LoadUser(refreshToken.Fields.UserID, refreshToken.Fields.Email))
 }
 
+func (s *Service) ListRefreshTokens(ctx context.Context, accessJWS string) ([]*domain.RefreshTokenFields, error) {
+	l := s.logger.With(slogx.RequestID(requestid.FromContext(ctx)))
+
+	accessToken, err := s.tokenManager.Parse(accessJWS) // expired tokens fail as well
+	if err != nil {
+		l.WarnContext(ctx, "parse access token", slogx.Error(err))
+		return nil, domain.ErrTokenInvalid
+	}
+	if accessToken.Fields.Kind != jwt.KindAccess {
+		l.WarnContext(ctx, "token kind mismatch")
+		return nil, domain.ErrTokenInvalid
+	}
+
+	var accessTokens []*domain.AccessTokenFields
+	err = s.transactor.Single(ctx, func(ctx context.Context, executor sqlx.Executor) error {
+		tokens, err := s.store.ListRefreshTokens(ctx, executor, accessToken.Fields.UserID)
+		if err != nil {
+			l.ErrorContext(ctx, "list refresh tokens from store", slogx.Error(err))
+			return err
+		}
+		accessTokens = tokens
+		return nil
+	})
+	return accessTokens, err
+}
+
 func (s *Service) issueAccessToken(user *domain.User) (*domain.AccessToken, error) {
 	return s.tokenManager.Sign(
 		jwt.NewTokenFields(user.ID, user.Email, jwt.KindAccess, s.tokenAccessDuration),

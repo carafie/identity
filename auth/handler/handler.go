@@ -119,3 +119,40 @@ func (h *Handler) RefreshAccessToken(w http.ResponseWriter, r *http.Request) htt
 		Body:       refreshAccessTokenResponse{AccessToken: access.JWS},
 	}
 }
+
+type listRefreshTokensResponse struct {
+	ID        string    `json:"id"`
+	CreatedAt time.Time `json:"created_at"`
+	ExpiresAt time.Time `json:"expires_at"`
+}
+
+func (h *Handler) ListRefreshTokens(w http.ResponseWriter, r *http.Request) httpx.Response {
+	requestID := requestid.FromContext(r.Context())
+
+	accessJWS := AccessJWSFromRequest(r)
+	if accessJWS == "" {
+		return httpx.Response{StatusCode: http.StatusUnauthorized, RequestID: requestID}
+	}
+	tokens, err := h.service.ListRefreshTokens(r.Context(), accessJWS)
+	if err != nil {
+		if errors.Is(err, domain.ErrTokenInvalid) {
+			return httpx.Response{StatusCode: http.StatusUnauthorized, RequestID: requestID}
+		}
+		return httpx.Response{StatusCode: http.StatusInternalServerError, RequestID: requestID}
+	}
+
+	body := make([]listRefreshTokensResponse, len(tokens))
+	for _, token := range tokens {
+		body = append(body, listRefreshTokensResponse{
+			ID:        token.ID.String(),
+			CreatedAt: token.CreatedAt,
+			ExpiresAt: token.ExpiresAt,
+		})
+	}
+
+	return httpx.Response{
+		StatusCode: http.StatusOK,
+		RequestID:  requestID,
+		Body:       body,
+	}
+}

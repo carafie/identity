@@ -3,6 +3,7 @@
 - [`POST` `/auth/otps`](#post-authotps)
 - [`POST` `/auth/otps/{id}`](#post-authotpsid)
 - [`POST` `/auth/tokens/refresh`](#post-authtokensrefresh)
+- [`GET` `/auth/tokens`](#get-authtokens)
 
 <br><br>
 
@@ -28,7 +29,7 @@ Content-Type: application/json
 ```
 
 ```json
-{ "id": "019fdb9f-1c1d-708e-b4ad-f3d019276c5b", "expires_at": "2026-08-07T09:50:32Z" }
+{ "id": "019fdb9f-1c1d-708e-b4ad-f3d019276c5b", "expires_at": "2026-12-25T18:45:59Z" }
 ```
 
 #### Errors:
@@ -102,3 +103,39 @@ Content-Type: application/json
 | Cause                                      | Status Code      |
 | ------------------------------------------ | ---------------- |
 | Invalid, expired, or revoked refresh token | 401 Unauthorized |
+
+<br><br>
+
+### `GET` `/auth/tokens`
+
+Lists all active refresh tokens.
+
+#### Request:
+
+```http
+Authorization: Bearer ey...
+```
+
+#### Response:
+
+```http
+HTTP/1.1 200 OK
+Content-Type: application/json
+```
+
+```json
+[
+  {
+    "id": "019fe6ce-e25e-71fd-bd7d-9b0ae97c9179",
+    "created_at": "2026-12-25T18:45:59Z",
+    "expires_at": "2026-12-25T18:45:59Z"
+  }
+  // ...
+]
+```
+
+#### Errors:
+
+| Cause                           | Status Code      |
+| ------------------------------- | ---------------- |
+| Invalid or expired access token | 401 Unauthorized |

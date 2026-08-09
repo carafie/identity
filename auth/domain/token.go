@@ -15,4 +15,7 @@ var (
 type (
 	AccessToken  = jwt.Token
 	RefreshToken = jwt.Token
+
+	AccessTokenFields  = jwt.TokenFields
+	RefreshTokenFields = jwt.TokenFields
 )
