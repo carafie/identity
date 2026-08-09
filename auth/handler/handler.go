@@ -50,6 +50,10 @@ func (h *Handler) RequestOTP(w http.ResponseWriter, r *http.Request) httpx.Respo
 	}
 }
 
+func (h *Handler) RegisterRequestOTP(mux *http.ServeMux) {
+	mux.Handle("POST /auth/otps", httpx.Handler(h.RequestOTP))
+}
+
 type confirmOTPParams struct {
 	Code string `json:"code"`
 }
@@ -90,6 +94,10 @@ func (h *Handler) ConfirmOTP(w http.ResponseWriter, r *http.Request) httpx.Respo
 	}
 }
 
+func (h *Handler) RegisterConfirmOTP(mux *http.ServeMux) {
+	mux.Handle("POST /auth/otps/{id}", httpx.Handler(h.ConfirmOTP))
+}
+
 type refreshAccessTokenResponse struct {
 	AccessToken string `json:"access_token"`
 }
@@ -118,6 +126,10 @@ func (h *Handler) RefreshAccessToken(w http.ResponseWriter, r *http.Request) htt
 		RequestID:  requestID,
 		Body:       refreshAccessTokenResponse{AccessToken: access.JWS},
 	}
+}
+
+func (h *Handler) RegisterRefreshAccessToken(mux *http.ServeMux) {
+	mux.Handle("POST /auth/tokens/refresh", httpx.Handler(h.RefreshAccessToken))
 }
 
 type listRefreshTokensResponse struct {
@@ -158,6 +170,10 @@ func (h *Handler) ListRefreshTokens(w http.ResponseWriter, r *http.Request) http
 	}
 }
 
+func (h *Handler) RegisterListRefreshTokens(mux *http.ServeMux) {
+	mux.Handle("GET /auth/tokens", httpx.Handler(h.ListRefreshTokens))
+}
+
 func (h *Handler) RevokeRefreshToken(w http.ResponseWriter, r *http.Request) httpx.Response {
 	requestID := requestid.FromContext(r.Context())
 
@@ -183,6 +199,10 @@ func (h *Handler) RevokeRefreshToken(w http.ResponseWriter, r *http.Request) htt
 		StatusCode: http.StatusNoContent,
 		RequestID:  requestID,
 	}
+}
+
+func (h *Handler) RegisterRevokeRefreshToken(mux *http.ServeMux) {
+	mux.Handle("DELETE /auth/tokens/{id}", httpx.Handler(h.RevokeRefreshToken))
 }
 
 func (h *Handler) DeleteUser(w http.ResponseWriter, r *http.Request) httpx.Response {
@@ -211,4 +231,8 @@ func (h *Handler) DeleteUser(w http.ResponseWriter, r *http.Request) httpx.Respo
 		StatusCode: http.StatusNoContent,
 		RequestID:  requestID,
 	}
+}
+
+func (h *Handler) RegisterDeleteUser(mux *http.ServeMux) {
+	mux.Handle("DELETE /auth/users/{id}", httpx.Handler(h.DeleteUser))
 }
