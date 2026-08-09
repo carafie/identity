@@ -29,13 +29,12 @@ type testStore struct {
 	getUserByEmailOrCreateErr error
 	deleteUserErr             error
 
-	createRefreshTokenErr  error
-	refreshTokenRevoked    bool
-	refreshTokenRevokedErr error
-	listRefreshTokens      []*domain.AccessTokenFields
-	listRefreshTokensErr   error
-
-	revokeRefreshTokenErr error
+	createRefreshTokenErr error
+	getRefreshToken       *domain.RefreshTokenFields
+	getRefreshTokenErr    error
+	listRefreshTokens     []*domain.AccessTokenFields
+	listRefreshTokensErr  error
+	deleteRefreshTokenErr error
 }
 
 func (s testStore) CreateOTP(ctx context.Context, executor sqlx.Executor, otp *domain.OTP) error {
@@ -60,8 +59,10 @@ func (s testStore) CreateRefreshToken(ctx context.Context, executor sqlx.Executo
 	return s.createRefreshTokenErr
 }
 
-func (s testStore) RefreshTokenRevoked(ctx context.Context, executor sqlx.Executor, tokenID uuid.UUID) (bool, error) {
-	return s.refreshTokenRevoked, s.refreshTokenRevokedErr
+func (s testStore) GetRefreshToken(ctx context.Context, executor sqlx.Executor, refreshTokenID uuid.UUID) (
+	*domain.RefreshTokenFields, error,
+) {
+	return s.getRefreshToken, s.getRefreshTokenErr
 }
 
 func (s testStore) ListRefreshTokens(
@@ -70,8 +71,8 @@ func (s testStore) ListRefreshTokens(
 	return s.listRefreshTokens, s.listRefreshTokensErr
 }
 
-func (s testStore) RevokeRefreshToken(ctx context.Context, executor sqlx.Executor, userID, tokenID uuid.UUID) error {
-	return s.revokeRefreshTokenErr
+func (s testStore) DeleteRefreshToken(ctx context.Context, executor sqlx.Executor, userID, tokenID uuid.UUID) error {
+	return s.deleteRefreshTokenErr
 }
 
 var _ store.Store = testStore{}
@@ -367,23 +368,17 @@ func TestService_RefreshAccessToken(t *testing.T) {
 			refreshJWS: refreshToken.JWS,
 			wantErr:    errTest,
 		},
-		"store refresh token revoked error": {
-			store:      testStore{refreshTokenRevokedErr: errTest},
+		"store get refresh token error": {
+			store:      testStore{getRefreshTokenErr: errTest},
 			transactor: testTransactor{},
 			refreshJWS: refreshToken.JWS,
 			wantErr:    errTest,
 		},
-		"store refresh token revoked not found error": {
-			store:      testStore{refreshTokenRevokedErr: sqlx.ErrNotFound},
+		"store get refresh token not found error": {
+			store:      testStore{getRefreshTokenErr: sqlx.ErrNotFound},
 			transactor: testTransactor{},
 			refreshJWS: refreshToken.JWS,
-			wantErr:    domain.ErrTokenExpired,
-		},
-		"revoked refresh token": {
-			store:      testStore{refreshTokenRevoked: true},
-			transactor: testTransactor{},
-			refreshJWS: refreshToken.JWS,
-			wantErr:    domain.ErrTokenRevoked,
+			wantErr:    domain.ErrTokenNotFound,
 		},
 		"success": {
 			store:      testStore{},
@@ -508,7 +503,7 @@ func TestService_ListRefreshTokens(t *testing.T) {
 	}
 }
 
-func TestService_RevokeRefreshToken(t *testing.T) {
+func TestService_DeleteRefreshToken(t *testing.T) {
 	tokenManager := testJWTManager(t)
 	user := domain.NewUser("token@test")
 
@@ -580,8 +575,8 @@ func TestService_RevokeRefreshToken(t *testing.T) {
 			refreshTokenID: refreshToken.Fields.ID.String(),
 			wantErr:        errTest,
 		},
-		"store revoke refresh token error": {
-			store:          testStore{revokeRefreshTokenErr: errTest},
+		"store delete refresh token error": {
+			store:          testStore{deleteRefreshTokenErr: errTest},
 			transactor:     testTransactor{},
 			accessJWS:      accessToken.JWS,
 			refreshTokenID: refreshToken.Fields.ID.String(),
@@ -609,10 +604,10 @@ func TestService_RevokeRefreshToken(t *testing.T) {
 				Transactor:           test.transactor,
 				Logger:               slog.New(slog.NewJSONHandler(t.Output(), nil)),
 			})
-			gotErr := service.RevokeRefreshToken(t.Context(), test.accessJWS, test.refreshTokenID)
+			gotErr := service.DeleteRefreshToken(t.Context(), test.accessJWS, test.refreshTokenID)
 			if !errors.Is(gotErr, test.wantErr) {
 				t.Errorf(
-					"Service.RevokeRefreshToken(...), gotErr=%q, wantErr=%q",
+					"Service.DeleteRefreshToken(...), gotErr=%q, wantErr=%q",
 					gotErr, test.wantErr,
 				)
 			}

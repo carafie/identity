@@ -9,7 +9,6 @@ import (
 var (
 	ErrTokenInvalid  = errors.New("token is invalid")
 	ErrTokenExpired  = errors.New("token is expired")
-	ErrTokenRevoked  = errors.New("token is revoked")
 	ErrTokenNotFound = errors.New("token not found")
 )
 

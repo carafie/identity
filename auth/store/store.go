@@ -16,7 +16,11 @@ type Store interface {
 	DeleteUser(ctx context.Context, executor sqlx.Executor, userID uuid.UUID) error
 
 	CreateRefreshToken(ctx context.Context, executor sqlx.Executor, token *domain.RefreshToken) error
-	ListRefreshTokens(ctx context.Context, executor sqlx.Executor, userID uuid.UUID) ([]*domain.RefreshTokenFields, error)
-	RefreshTokenRevoked(ctx context.Context, executor sqlx.Executor, tokenID uuid.UUID) (bool, error)
-	RevokeRefreshToken(ctx context.Context, executor sqlx.Executor, userID, tokenID uuid.UUID) error
+	GetRefreshToken(ctx context.Context, executor sqlx.Executor, refreshTokenID uuid.UUID) (
+		*domain.RefreshTokenFields, error,
+	)
+	ListRefreshTokens(ctx context.Context, executor sqlx.Executor, userID uuid.UUID) (
+		[]*domain.RefreshTokenFields, error,
+	)
+	DeleteRefreshToken(ctx context.Context, executor sqlx.Executor, userID, refreshTokenID uuid.UUID) error
 }

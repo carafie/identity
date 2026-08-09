@@ -186,25 +186,26 @@ func (s *Service) RefreshAccessToken(ctx context.Context, refreshJWS string) (*d
 		return nil, domain.ErrTokenInvalid
 	}
 
-	var tokenRevoked bool
+	var exists bool
 	err = s.transactor.Single(ctx, func(ctx context.Context, executor sqlx.Executor) error {
-		revoked, err := s.store.RefreshTokenRevoked(ctx, executor, refreshToken.Fields.ID)
+		_, err := s.store.GetRefreshToken(ctx, executor, refreshToken.Fields.ID)
 		if err != nil {
 			if errors.Is(err, sqlx.ErrNotFound) {
-				l.WarnContext(ctx, "is refresh token revoked", slogx.Error(err))
-				return domain.ErrTokenExpired
+				l.WarnContext(ctx, "is refresh token in store", slogx.Error(err))
+				exists = false
+				return nil
 			}
-			l.ErrorContext(ctx, "is refresh token revoked", slogx.Error(err))
+			l.ErrorContext(ctx, "is refresh token in store", slogx.Error(err))
 			return err
 		}
-		tokenRevoked = revoked
+		exists = true
 		return nil
 	})
 	if err != nil {
 		return nil, err
 	}
-	if tokenRevoked {
-		return nil, domain.ErrTokenRevoked
+	if !exists {
+		return nil, domain.ErrTokenNotFound
 	}
 
 	return s.issueAccessToken(domain.LoadUser(refreshToken.Fields.UserID, refreshToken.Fields.Email))
@@ -236,7 +237,7 @@ func (s *Service) ListRefreshTokens(ctx context.Context, accessJWS string) ([]*d
 	return accessTokens, err
 }
 
-func (s *Service) RevokeRefreshToken(ctx context.Context, accessJWS, refreshTokenID string) error {
+func (s *Service) DeleteRefreshToken(ctx context.Context, accessJWS, refreshTokenID string) error {
 	l := s.logger.With(slogx.RequestID(requestid.FromContext(ctx)))
 
 	accessToken, err := s.tokenManager.Parse(accessJWS) // expired tokens fail as well
@@ -256,12 +257,12 @@ func (s *Service) RevokeRefreshToken(ctx context.Context, accessJWS, refreshToke
 	}
 
 	return s.transactor.Single(ctx, func(ctx context.Context, executor sqlx.Executor) error {
-		if err := s.store.RevokeRefreshToken(ctx, executor, accessToken.Fields.UserID, tokenID); err != nil {
+		if err := s.store.DeleteRefreshToken(ctx, executor, accessToken.Fields.UserID, tokenID); err != nil {
 			if errors.Is(err, sqlx.ErrNotFound) {
-				l.WarnContext(ctx, "revoke refresh token from store", slogx.Error(err))
+				l.WarnContext(ctx, "delete refresh token from store", slogx.Error(err))
 				return domain.ErrTokenNotFound
 			}
-			l.ErrorContext(ctx, "revoke refresh token from store", slogx.Error(err))
+			l.ErrorContext(ctx, "delete refresh token from store", slogx.Error(err))
 			return err
 		}
 		return nil

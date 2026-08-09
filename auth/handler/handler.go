@@ -115,7 +115,7 @@ func (h *Handler) RefreshAccessToken(w http.ResponseWriter, r *http.Request) htt
 		statusCode := http.StatusInternalServerError
 		if errors.Is(err, domain.ErrTokenInvalid) ||
 			errors.Is(err, domain.ErrTokenExpired) ||
-			errors.Is(err, domain.ErrTokenRevoked) {
+			errors.Is(err, domain.ErrTokenNotFound) {
 			statusCode = http.StatusUnauthorized
 		}
 		return httpx.Response{StatusCode: statusCode, RequestID: requestID}
@@ -174,7 +174,7 @@ func (h *Handler) RegisterListRefreshTokens(mux *http.ServeMux) {
 	mux.Handle("GET /auth/tokens", httpx.Handler(h.ListRefreshTokens))
 }
 
-func (h *Handler) RevokeRefreshToken(w http.ResponseWriter, r *http.Request) httpx.Response {
+func (h *Handler) DeleteRefreshToken(w http.ResponseWriter, r *http.Request) httpx.Response {
 	requestID := requestid.FromContext(r.Context())
 
 	refreshTokenID := r.PathValue("id")
@@ -183,14 +183,14 @@ func (h *Handler) RevokeRefreshToken(w http.ResponseWriter, r *http.Request) htt
 	if accessJWS == "" {
 		return httpx.Response{StatusCode: http.StatusUnauthorized, RequestID: requestID}
 	}
-	err := h.service.RevokeRefreshToken(r.Context(), accessJWS, refreshTokenID)
+	err := h.service.DeleteRefreshToken(r.Context(), accessJWS, refreshTokenID)
 	if err != nil {
 		statusCode := http.StatusInternalServerError
 		switch {
 		case errors.Is(err, domain.ErrTokenInvalid):
 			statusCode = http.StatusUnauthorized
 		case errors.Is(err, domain.ErrTokenNotFound):
-			statusCode = http.StatusNotFound
+			statusCode = http.StatusNoContent
 		}
 		return httpx.Response{StatusCode: statusCode, RequestID: requestID}
 	}
@@ -201,8 +201,8 @@ func (h *Handler) RevokeRefreshToken(w http.ResponseWriter, r *http.Request) htt
 	}
 }
 
-func (h *Handler) RegisterRevokeRefreshToken(mux *http.ServeMux) {
-	mux.Handle("DELETE /auth/tokens/{id}", httpx.Handler(h.RevokeRefreshToken))
+func (h *Handler) RegisterDeleteRefreshToken(mux *http.ServeMux) {
+	mux.Handle("DELETE /auth/tokens/{id}", httpx.Handler(h.DeleteRefreshToken))
 }
 
 func (h *Handler) DeleteUser(w http.ResponseWriter, r *http.Request) httpx.Response {
@@ -219,10 +219,8 @@ func (h *Handler) DeleteUser(w http.ResponseWriter, r *http.Request) httpx.Respo
 		switch {
 		case errors.Is(err, domain.ErrTokenInvalid):
 			statusCode = http.StatusUnauthorized
-		case errors.Is(err, uuid.ErrInvalid):
-			statusCode = http.StatusUnprocessableEntity
 		case errors.Is(err, domain.ErrUserNotFound):
-			statusCode = http.StatusNotFound
+			statusCode = http.StatusNoContent
 		}
 		return httpx.Response{StatusCode: statusCode, RequestID: requestID}
 	}

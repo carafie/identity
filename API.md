@@ -102,9 +102,9 @@ Content-Type: application/json
 
 #### Errors:
 
-| Cause                                      | Status Code      |
-| ------------------------------------------ | ---------------- |
-| Invalid, expired, or revoked refresh token | 401 Unauthorized |
+| Cause                            | Status Code      |
+| -------------------------------- | ---------------- |
+| Invalid or expired refresh token | 401 Unauthorized |
 
 <br><br>
 
@@ -146,7 +146,7 @@ Content-Type: application/json
 
 ### `DELETE` `/auth/tokens/{id}`
 
-Revokes a refresh token.
+Deletes a refresh token.
 
 #### Request:
 
@@ -165,7 +165,6 @@ HTTP/1.1 204 No Content
 | Cause                           | Status Code      |
 | ------------------------------- | ---------------- |
 | Invalid or expired access token | 401 Unauthorized |
-| Refresh token not found         | 404 Not Found    |
 
 <br><br>
 
@@ -190,4 +189,3 @@ HTTP/1.1 204 No Content
 | Cause                           | Status Code      |
 | ------------------------------- | ---------------- |
 | Invalid or expired access token | 401 Unauthorized |
-| User not found                  | 404 Not Found    |
