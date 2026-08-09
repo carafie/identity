@@ -236,6 +236,38 @@ func (s *Service) ListRefreshTokens(ctx context.Context, accessJWS string) ([]*d
 	return accessTokens, err
 }
 
+func (s *Service) RevokeRefreshToken(ctx context.Context, accessJWS, refreshTokenID string) error {
+	l := s.logger.With(slogx.RequestID(requestid.FromContext(ctx)))
+
+	accessToken, err := s.tokenManager.Parse(accessJWS) // expired tokens fail as well
+	if err != nil {
+		l.WarnContext(ctx, "parse access token", slogx.Error(err))
+		return domain.ErrTokenInvalid
+	}
+	if accessToken.Fields.Kind != jwt.KindAccess {
+		l.WarnContext(ctx, "token kind mismatch")
+		return domain.ErrTokenInvalid
+	}
+
+	tokenID, err := uuid.Parse(refreshTokenID)
+	if err != nil {
+		l.WarnContext(ctx, "invalid refresh token id")
+		return domain.ErrTokenInvalid
+	}
+
+	return s.transactor.Single(ctx, func(ctx context.Context, executor sqlx.Executor) error {
+		if err := s.store.RevokeRefreshToken(ctx, executor, accessToken.Fields.UserID, tokenID); err != nil {
+			if errors.Is(err, sqlx.ErrNotFound) {
+				l.WarnContext(ctx, "revoke refresh token from store", slogx.Error(err))
+				return domain.ErrTokenNotFound
+			}
+			l.ErrorContext(ctx, "revoke refresh token from store", slogx.Error(err))
+			return err
+		}
+		return nil
+	})
+}
+
 func (s *Service) issueAccessToken(user *domain.User) (*domain.AccessToken, error) {
 	return s.tokenManager.Sign(
 		jwt.NewTokenFields(user.ID, user.Email, jwt.KindAccess, s.tokenAccessDuration),

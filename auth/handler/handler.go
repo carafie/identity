@@ -135,10 +135,11 @@ func (h *Handler) ListRefreshTokens(w http.ResponseWriter, r *http.Request) http
 	}
 	tokens, err := h.service.ListRefreshTokens(r.Context(), accessJWS)
 	if err != nil {
+		statusCode := http.StatusInternalServerError
 		if errors.Is(err, domain.ErrTokenInvalid) {
-			return httpx.Response{StatusCode: http.StatusUnauthorized, RequestID: requestID}
+			statusCode = http.StatusUnauthorized
 		}
-		return httpx.Response{StatusCode: http.StatusInternalServerError, RequestID: requestID}
+		return httpx.Response{StatusCode: statusCode, RequestID: requestID}
 	}
 
 	body := make([]listRefreshTokensResponse, len(tokens))
@@ -154,5 +155,32 @@ func (h *Handler) ListRefreshTokens(w http.ResponseWriter, r *http.Request) http
 		StatusCode: http.StatusOK,
 		RequestID:  requestID,
 		Body:       body,
+	}
+}
+
+func (h *Handler) RevokeRefreshToken(w http.ResponseWriter, r *http.Request) httpx.Response {
+	requestID := requestid.FromContext(r.Context())
+
+	refreshTokenID := r.PathValue("id")
+
+	accessJWS := AccessJWSFromRequest(r)
+	if accessJWS == "" {
+		return httpx.Response{StatusCode: http.StatusUnauthorized, RequestID: requestID}
+	}
+	err := h.service.RevokeRefreshToken(r.Context(), accessJWS, refreshTokenID)
+	if err != nil {
+		statusCode := http.StatusInternalServerError
+		switch {
+		case errors.Is(err, domain.ErrTokenInvalid):
+			statusCode = http.StatusUnauthorized
+		case errors.Is(err, domain.ErrTokenNotFound):
+			statusCode = http.StatusNotFound
+		}
+		return httpx.Response{StatusCode: statusCode, RequestID: requestID}
+	}
+
+	return httpx.Response{
+		StatusCode: http.StatusNoContent,
+		RequestID:  requestID,
 	}
 }

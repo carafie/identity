@@ -17,4 +17,5 @@ type Store interface {
 	CreateRefreshToken(ctx context.Context, executor sqlx.Executor, token *domain.RefreshToken) error
 	ListRefreshTokens(ctx context.Context, executor sqlx.Executor, userID uuid.UUID) ([]*domain.RefreshTokenFields, error)
 	RefreshTokenRevoked(ctx context.Context, executor sqlx.Executor, tokenID uuid.UUID) (bool, error)
+	RevokeRefreshToken(ctx context.Context, executor sqlx.Executor, userID, tokenID uuid.UUID) error
 }

@@ -4,6 +4,7 @@
 - [`POST` `/auth/otps/{id}`](#post-authotpsid)
 - [`POST` `/auth/tokens/refresh`](#post-authtokensrefresh)
 - [`GET` `/auth/tokens`](#get-authtokens)
+- [`DELETE` `/auth/tokens/{id}`](#delete-authtokensid)
 
 <br><br>
 
@@ -139,3 +140,28 @@ Content-Type: application/json
 | Cause                           | Status Code      |
 | ------------------------------- | ---------------- |
 | Invalid or expired access token | 401 Unauthorized |
+
+<br><br>
+
+### `DELETE` `/auth/tokens/{id}`
+
+Revokes a refresh token.
+
+#### Request:
+
+```http
+Authorization: Bearer ey...
+```
+
+#### Response:
+
+```http
+HTTP/1.1 204 No Content
+```
+
+#### Errors:
+
+| Cause                           | Status Code      |
+| ------------------------------- | ---------------- |
+| Invalid or expired access token | 401 Unauthorized |
+| Refresh token not found         | 404 Not Found    |
