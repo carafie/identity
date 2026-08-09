@@ -13,6 +13,7 @@ type Store interface {
 	ConsumeOTP(ctx context.Context, executor sqlx.Executor, otpID uuid.UUID) (*domain.OTP, error)
 
 	GetUserByEmailOrCreate(ctx context.Context, executor sqlx.Executor, user *domain.User) (*domain.User, error)
+	DeleteUser(ctx context.Context, executor sqlx.Executor, userID uuid.UUID) error
 
 	CreateRefreshToken(ctx context.Context, executor sqlx.Executor, token *domain.RefreshToken) error
 	ListRefreshTokens(ctx context.Context, executor sqlx.Executor, userID uuid.UUID) ([]*domain.RefreshTokenFields, error)

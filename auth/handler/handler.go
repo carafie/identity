@@ -184,3 +184,31 @@ func (h *Handler) RevokeRefreshToken(w http.ResponseWriter, r *http.Request) htt
 		RequestID:  requestID,
 	}
 }
+
+func (h *Handler) DeleteUser(w http.ResponseWriter, r *http.Request) httpx.Response {
+	requestID := requestid.FromContext(r.Context())
+
+	userID := r.PathValue("id")
+
+	accessJWS := AccessJWSFromRequest(r)
+	if accessJWS == "" {
+		return httpx.Response{StatusCode: http.StatusUnauthorized, RequestID: requestID}
+	}
+	if err := h.service.DeleteUser(r.Context(), accessJWS, userID); err != nil {
+		statusCode := http.StatusInternalServerError
+		switch {
+		case errors.Is(err, domain.ErrTokenInvalid):
+			statusCode = http.StatusUnauthorized
+		case errors.Is(err, uuid.ErrInvalid):
+			statusCode = http.StatusUnprocessableEntity
+		case errors.Is(err, domain.ErrUserNotFound):
+			statusCode = http.StatusNotFound
+		}
+		return httpx.Response{StatusCode: statusCode, RequestID: requestID}
+	}
+
+	return httpx.Response{
+		StatusCode: http.StatusNoContent,
+		RequestID:  requestID,
+	}
+}

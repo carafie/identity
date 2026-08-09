@@ -5,6 +5,7 @@
 - [`POST` `/auth/tokens/refresh`](#post-authtokensrefresh)
 - [`GET` `/auth/tokens`](#get-authtokens)
 - [`DELETE` `/auth/tokens/{id}`](#delete-authtokensid)
+- [`DELETE` `/auth/users/{id}`](#delete-authusersid)
 
 <br><br>
 
@@ -165,3 +166,28 @@ HTTP/1.1 204 No Content
 | ------------------------------- | ---------------- |
 | Invalid or expired access token | 401 Unauthorized |
 | Refresh token not found         | 404 Not Found    |
+
+<br><br>
+
+### `DELETE` `/auth/users/{id}`
+
+Deletes a user.
+
+#### Request:
+
+```http
+Authorization: Bearer ey...
+```
+
+#### Response:
+
+```http
+HTTP/1.1 204 No Content
+```
+
+#### Errors:
+
+| Cause                           | Status Code      |
+| ------------------------------- | ---------------- |
+| Invalid or expired access token | 401 Unauthorized |
+| User not found                  | 404 Not Found    |

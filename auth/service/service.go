@@ -268,6 +268,41 @@ func (s *Service) RevokeRefreshToken(ctx context.Context, accessJWS, refreshToke
 	})
 }
 
+func (s *Service) DeleteUser(ctx context.Context, accessJWS, userID string) error {
+	l := s.logger.With(slogx.RequestID(requestid.FromContext(ctx)))
+
+	accessToken, err := s.tokenManager.Parse(accessJWS) // expired tokens fail as well
+	if err != nil {
+		l.WarnContext(ctx, "parse access token", slogx.Error(err))
+		return domain.ErrTokenInvalid
+	}
+	if accessToken.Fields.Kind != jwt.KindAccess {
+		l.WarnContext(ctx, "token kind mismatch")
+		return domain.ErrTokenInvalid
+	}
+
+	parsedUserID, err := uuid.Parse(userID)
+	if err != nil {
+		return domain.ErrUserNotFound
+	}
+	if parsedUserID != accessToken.Fields.UserID {
+		l.WarnContext(ctx, "user id mismatch")
+		return domain.ErrUserNotFound
+	}
+
+	return s.transactor.Single(ctx, func(ctx context.Context, executor sqlx.Executor) error {
+		if err := s.store.DeleteUser(ctx, executor, parsedUserID); err != nil {
+			if errors.Is(err, sqlx.ErrNotFound) {
+				l.WarnContext(ctx, "delete user from store", slogx.Error(err))
+				return domain.ErrUserNotFound
+			}
+			l.ErrorContext(ctx, "delete user from store", slogx.Error(err))
+			return err
+		}
+		return nil
+	})
+}
+
 func (s *Service) issueAccessToken(user *domain.User) (*domain.AccessToken, error) {
 	return s.tokenManager.Sign(
 		jwt.NewTokenFields(user.ID, user.Email, jwt.KindAccess, s.tokenAccessDuration),

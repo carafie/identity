@@ -27,6 +27,7 @@ type testStore struct {
 
 	getUserByEmailOrCreate    *domain.User
 	getUserByEmailOrCreateErr error
+	deleteUserErr             error
 
 	createRefreshTokenErr  error
 	refreshTokenRevoked    bool
@@ -49,6 +50,10 @@ func (s testStore) GetUserByEmailOrCreate(
 	ctx context.Context, executor sqlx.Executor, user *domain.User,
 ) (*domain.User, error) {
 	return s.getUserByEmailOrCreate, s.getUserByEmailOrCreateErr
+}
+
+func (s testStore) DeleteUser(ctx context.Context, executor sqlx.Executor, userID uuid.UUID) error {
+	return s.deleteUserErr
 }
 
 func (s testStore) CreateRefreshToken(ctx context.Context, executor sqlx.Executor, token *domain.RefreshToken) error {
@@ -608,6 +613,111 @@ func TestService_RevokeRefreshToken(t *testing.T) {
 			if !errors.Is(gotErr, test.wantErr) {
 				t.Errorf(
 					"Service.RevokeRefreshToken(...), gotErr=%q, wantErr=%q",
+					gotErr, test.wantErr,
+				)
+			}
+		})
+	}
+}
+
+func TestService_DeleteUser(t *testing.T) {
+	tokenManager := testJWTManager(t)
+	user := domain.NewUser("token@test")
+
+	accessToken, err := tokenManager.Sign(
+		jwt.NewTokenFields(user.ID, user.Email, jwt.KindAccess, time.Hour),
+	)
+	if err != nil {
+		t.Fatalf("failed to sign token: %v", err)
+	}
+	expiredAccessToken, err := tokenManager.Sign(
+		jwt.NewTokenFields(user.ID, user.Email, jwt.KindAccess, -time.Hour),
+	)
+	if err != nil {
+		t.Fatalf("failed to sign token: %v", err)
+	}
+	invalidKindToken, err := tokenManager.Sign(
+		jwt.NewTokenFields(user.ID, user.Email, jwt.KindRefresh, time.Hour),
+	)
+	if err != nil {
+		t.Fatalf("failed to sign token: %v", err)
+	}
+
+	tests := map[string]struct {
+		store      store.Store
+		transactor sqlx.Transactor
+		accessJWS  string
+		userID     string
+		wantErr    error
+	}{
+		"invalid access jws": {
+			store:      testStore{},
+			transactor: testTransactor{},
+			accessJWS:  "invalid",
+			userID:     user.ID.String(),
+			wantErr:    domain.ErrTokenInvalid,
+		},
+		"expired access token": {
+			store:      testStore{},
+			transactor: testTransactor{},
+			accessJWS:  expiredAccessToken.JWS,
+			userID:     user.ID.String(),
+			wantErr:    domain.ErrTokenInvalid,
+		},
+		"invalid token kind": {
+			store:      testStore{},
+			transactor: testTransactor{},
+			accessJWS:  invalidKindToken.JWS,
+			userID:     user.ID.String(),
+			wantErr:    domain.ErrTokenInvalid,
+		},
+		"invalid user id": {
+			store:      testStore{},
+			transactor: testTransactor{},
+			accessJWS:  invalidKindToken.JWS,
+			userID:     "invalid",
+			wantErr:    domain.ErrTokenInvalid,
+		},
+		"transactor single error": {
+			store:      testStore{},
+			transactor: testTransactor{singleErr: errTest},
+			accessJWS:  accessToken.JWS,
+			userID:     user.ID.String(),
+			wantErr:    errTest,
+		},
+		"store delete user error": {
+			store:      testStore{deleteUserErr: errTest},
+			transactor: testTransactor{},
+			accessJWS:  accessToken.JWS,
+			userID:     user.ID.String(),
+			wantErr:    errTest,
+		},
+		"success": {
+			store:      testStore{},
+			transactor: testTransactor{},
+			accessJWS:  accessToken.JWS,
+			userID:     user.ID.String(),
+			wantErr:    nil,
+		},
+	}
+
+	for name, test := range tests {
+		t.Run(name, func(t *testing.T) {
+			service := New(&Params{
+				Store:                test.store,
+				Mailer:               testMailer{},
+				OTPDuration:          15 * time.Minute,
+				OTPMaxAttempts:       3,
+				TokenManager:         tokenManager,
+				TokenAccessDuration:  1 * time.Hour,
+				TokenRefreshDuration: 90 * 24 * time.Hour,
+				Transactor:           test.transactor,
+				Logger:               slog.New(slog.NewJSONHandler(t.Output(), nil)),
+			})
+			gotErr := service.DeleteUser(t.Context(), test.accessJWS, test.userID)
+			if !errors.Is(gotErr, test.wantErr) {
+				t.Errorf(
+					"Service.DeleteUser(...), gotErr=%q, wantErr=%q",
 					gotErr, test.wantErr,
 				)
 			}

@@ -1,9 +1,13 @@
 package domain
 
 import (
+	"errors"
+
 	"github.com/carafie/identity/platform/mail"
 	"github.com/carafie/identity/platform/uuid"
 )
+
+var ErrUserNotFound = errors.New("user not found")
 
 type User struct {
 	ID    uuid.UUID
