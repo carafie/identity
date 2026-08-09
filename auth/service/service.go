@@ -181,6 +181,10 @@ func (s *Service) RefreshAccessToken(ctx context.Context, refreshJWS string) (*d
 		l.WarnContext(ctx, "parse refresh token", slogx.Error(err))
 		return nil, domain.ErrTokenInvalid
 	}
+	if refreshToken.Fields.Kind != jwt.KindRefresh {
+		l.WarnContext(ctx, "token kind mismatch")
+		return nil, domain.ErrTokenInvalid
+	}
 
 	var tokenRevoked bool
 	err = s.transactor.Single(ctx, func(ctx context.Context, executor sqlx.Executor) error {

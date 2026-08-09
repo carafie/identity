@@ -311,6 +311,12 @@ func TestService_RefreshAccessToken(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to sign token: %v", err)
 	}
+	invalidKindToken, err := tokenManager.Sign(
+		jwt.NewTokenFields(user.ID, user.Email, jwt.KindAccess, time.Hour),
+	)
+	if err != nil {
+		t.Fatalf("failed to sign token: %v", err)
+	}
 
 	tests := map[string]struct {
 		store      store.Store
@@ -328,6 +334,12 @@ func TestService_RefreshAccessToken(t *testing.T) {
 			store:      testStore{},
 			transactor: testTransactor{},
 			refreshJWS: expiredRefreshToken.JWS,
+			wantErr:    domain.ErrTokenInvalid,
+		},
+		"invalid token kind": {
+			store:      testStore{},
+			transactor: testTransactor{},
+			refreshJWS: invalidKindToken.JWS,
 			wantErr:    domain.ErrTokenInvalid,
 		},
 		"transactor single error": {
