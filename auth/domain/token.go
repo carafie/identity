@@ -48,6 +48,10 @@ func NewRefreshToken(userID uuid.UUID, email mail.Email, duration time.Duration)
 	return (*RefreshToken)(newToken(userID, email, KindRefresh, duration))
 }
 
+func LoadRefreshToken(id, userID uuid.UUID, email mail.Email, createdAt, expiresAt time.Time) *RefreshToken {
+	return (*RefreshToken)(loadToken(id, userID, email, KindRefresh, createdAt, expiresAt))
+}
+
 func newToken(userID uuid.UUID, email mail.Email, kind Kind, duration time.Duration) *Token {
 	now := clock.Normalize(time.Now())
 	return &Token{

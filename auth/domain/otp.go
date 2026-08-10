@@ -39,6 +39,17 @@ func NewOTP(email mail.Email, duration time.Duration) *OTP {
 	}
 }
 
+func LoadOTP(id uuid.UUID, email mail.Email, code Code, attempts int, createdAt, expiresAt time.Time) *OTP {
+	return &OTP{
+		ID:        id,
+		Email:     email,
+		Code:      code,
+		Attempts:  attempts,
+		CreatedAt: clock.Normalize(createdAt),
+		ExpiresAt: clock.Normalize(expiresAt),
+	}
+}
+
 func (otp *OTP) Validate(code Code, maxAttempts int) error {
 	if otp == nil || clock.InPast(otp.ExpiresAt) {
 		return ErrCodeExpired

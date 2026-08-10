@@ -8,9 +8,14 @@ import (
 	"github.com/carafie/identity/platform/uuid"
 )
 
+type Provider interface {
+	New(executor sqlx.Executor) Store
+}
+
 type Store interface {
 	CreateOTP(ctx context.Context, otp *domain.OTP) error
 	ConsumeOTP(ctx context.Context, otpID uuid.UUID) (*domain.OTP, error)
+	// DeleteOTP(ctx context.Context, otpID uuid.UUID) error
 
 	GetUserByEmailOrCreate(ctx context.Context, user *domain.User) (*domain.User, error)
 	DeleteUser(ctx context.Context, userID uuid.UUID) error
@@ -19,8 +24,4 @@ type Store interface {
 	GetRefreshToken(ctx context.Context, refreshTokenID uuid.UUID) (*domain.RefreshToken, error)
 	ListRefreshTokens(ctx context.Context, userID uuid.UUID) ([]*domain.RefreshToken, error)
 	DeleteRefreshToken(ctx context.Context, userID, refreshTokenID uuid.UUID) error
-}
-
-type Provider interface {
-	New(executor sqlx.Executor) Store
 }
