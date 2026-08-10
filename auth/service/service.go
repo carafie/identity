@@ -132,6 +132,7 @@ func (s *Service) ConfirmOTP(ctx context.Context, otpID, code string) (
 	)
 	err = s.transactor.Atomic(ctx, func(ctx context.Context, executor sqlx.Executor) (sqlx.TCL, error) {
 		store := s.storeProvider.New(executor)
+
 		otp, err := store.ConsumeOTP(ctx, parsedOTPID)
 		if err != nil {
 			if errors.Is(err, sqlx.ErrNotFound) {
@@ -145,6 +146,11 @@ func (s *Service) ConfirmOTP(ctx context.Context, otpID, code string) (
 			if errors.Is(err, domain.ErrCodeMismatched) {
 				return sqlx.Commit, err
 			}
+			return sqlx.Rollback, err
+		}
+
+		if err := store.DeleteOTP(ctx, otp.ID); err != nil {
+			l.ErrorContext(ctx, "delete otp from store", slogx.Error(err))
 			return sqlx.Rollback, err
 		}
 

@@ -15,7 +15,7 @@ type Provider interface {
 type Store interface {
 	CreateOTP(ctx context.Context, otp *domain.OTP) error
 	ConsumeOTP(ctx context.Context, otpID uuid.UUID) (*domain.OTP, error)
-	// DeleteOTP(ctx context.Context, otpID uuid.UUID) error
+	DeleteOTP(ctx context.Context, otpID uuid.UUID) error
 
 	GetUserByEmailOrCreate(ctx context.Context, user *domain.User) (*domain.User, error)
 	DeleteUser(ctx context.Context, userID uuid.UUID) error

@@ -62,6 +62,21 @@ func (p *Postgres) ConsumeOTP(ctx context.Context, otpID uuid.UUID) (*domain.OTP
 	return row.Parse()
 }
 
+func (p *Postgres) DeleteOTP(ctx context.Context, otpID uuid.UUID) error {
+	const query = `
+		DELETE FROM otps
+		WHERE id = $1
+	`
+	result, err := p.executor.ExecContext(ctx, query, otpID)
+	if err != nil {
+		return err
+	}
+	if affected, _ := result.RowsAffected(); affected != 1 {
+		return sqlx.ErrNotFound
+	}
+	return nil
+}
+
 func (p *Postgres) GetUserByEmailOrCreate(ctx context.Context, user *domain.User) (*domain.User, error) {
 	const query = `
 		WITH inserted AS (

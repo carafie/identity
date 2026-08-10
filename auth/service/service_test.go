@@ -23,6 +23,7 @@ type testStore struct {
 	createOTPErr  error
 	consumeOTP    *domain.OTP
 	consumeOTPErr error
+	deleteOTPErr  error
 
 	getUserByEmailOrCreate    *domain.User
 	getUserByEmailOrCreateErr error
@@ -42,6 +43,10 @@ func (s testStore) CreateOTP(ctx context.Context, otp *domain.OTP) error {
 
 func (s testStore) ConsumeOTP(ctx context.Context, otpID uuid.UUID) (*domain.OTP, error) {
 	return s.consumeOTP, s.consumeOTPErr
+}
+
+func (s testStore) DeleteOTP(ctx context.Context, otpID uuid.UUID) error {
+	return s.deleteOTPErr
 }
 
 func (s testStore) GetUserByEmailOrCreate(ctx context.Context, user *domain.User) (*domain.User, error) {
@@ -269,6 +274,14 @@ func TestService_ConfirmOTP(t *testing.T) {
 			otpID:          otp.ID.String(),
 			code:           string(domain.NewCode()),
 			wantErr:        domain.ErrCodeMismatched,
+		},
+		"delete otp store error": {
+			storeProvider:  testStoreProvider{testStore{consumeOTP: otp, deleteOTPErr: errTest}},
+			otpMaxAttempts: 3,
+			transactor:     testTransactor{},
+			otpID:          otp.ID.String(),
+			code:           string(otp.Code),
+			wantErr:        errTest,
 		},
 		"get by email or create user store error": {
 			storeProvider:  testStoreProvider{testStore{consumeOTP: otp, getUserByEmailOrCreateErr: errTest}},
