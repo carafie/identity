@@ -36,45 +36,49 @@ type testStore struct {
 	deleteRefreshTokenErr error
 }
 
-func (s testStore) CreateOTP(ctx context.Context, executor sqlx.Executor, otp *domain.OTP) error {
+func (s testStore) CreateOTP(ctx context.Context, otp *domain.OTP) error {
 	return s.createOTPErr
 }
 
-func (s testStore) ConsumeOTP(ctx context.Context, executor sqlx.Executor, otpID uuid.UUID) (*domain.OTP, error) {
+func (s testStore) ConsumeOTP(ctx context.Context, otpID uuid.UUID) (*domain.OTP, error) {
 	return s.consumeOTP, s.consumeOTPErr
 }
 
-func (s testStore) GetUserByEmailOrCreate(
-	ctx context.Context, executor sqlx.Executor, user *domain.User,
-) (*domain.User, error) {
+func (s testStore) GetUserByEmailOrCreate(ctx context.Context, user *domain.User) (*domain.User, error) {
 	return s.getUserByEmailOrCreate, s.getUserByEmailOrCreateErr
 }
 
-func (s testStore) DeleteUser(ctx context.Context, executor sqlx.Executor, userID uuid.UUID) error {
+func (s testStore) DeleteUser(ctx context.Context, userID uuid.UUID) error {
 	return s.deleteUserErr
 }
 
-func (s testStore) CreateRefreshToken(ctx context.Context, executor sqlx.Executor, token *domain.RefreshToken) error {
+func (s testStore) CreateRefreshToken(ctx context.Context, token *domain.RefreshToken) error {
 	return s.createRefreshTokenErr
 }
 
-func (s testStore) GetRefreshToken(ctx context.Context, executor sqlx.Executor, refreshTokenID uuid.UUID) (
-	*domain.RefreshToken, error,
-) {
+func (s testStore) GetRefreshToken(ctx context.Context, refreshTokenID uuid.UUID) (*domain.RefreshToken, error) {
 	return s.getRefreshToken, s.getRefreshTokenErr
 }
 
-func (s testStore) ListRefreshTokens(
-	ctx context.Context, executor sqlx.Executor, userID uuid.UUID,
-) ([]*domain.RefreshToken, error) {
+func (s testStore) ListRefreshTokens(ctx context.Context, userID uuid.UUID) ([]*domain.RefreshToken, error) {
 	return s.listRefreshTokens, s.listRefreshTokensErr
 }
 
-func (s testStore) DeleteRefreshToken(ctx context.Context, executor sqlx.Executor, userID, tokenID uuid.UUID) error {
+func (s testStore) DeleteRefreshToken(ctx context.Context, userID, tokenID uuid.UUID) error {
 	return s.deleteRefreshTokenErr
 }
 
 var _ store.Store = testStore{}
+
+type testStoreProvider struct {
+	store testStore
+}
+
+func (p testStoreProvider) New(executor sqlx.Executor) store.Store {
+	return p.store
+}
+
+var _ store.Provider = testStoreProvider{}
 
 type testMailer struct {
 	sendOTPRequestErr error
@@ -117,53 +121,53 @@ func (t testTransactor) Atomic(ctx context.Context, work sqlx.TransactorAtomicWo
 
 func TestService_RequestOTP(t *testing.T) {
 	tests := map[string]struct {
-		store      store.Store
-		mailer     mailer.Mailer
-		transactor sqlx.Transactor
-		email      string
-		wantErr    error
+		storeProvider store.Provider
+		mailer        mailer.Mailer
+		transactor    sqlx.Transactor
+		email         string
+		wantErr       error
 	}{
 		"invalid email": {
-			store:      testStore{},
-			mailer:     testMailer{},
-			transactor: testTransactor{},
-			email:      "invalid",
-			wantErr:    mail.ErrInvalid,
+			storeProvider: testStoreProvider{testStore{}},
+			mailer:        testMailer{},
+			transactor:    testTransactor{},
+			email:         "invalid",
+			wantErr:       mail.ErrInvalid,
 		},
 		"transactor single error": {
-			store:      testStore{},
-			mailer:     testMailer{},
-			transactor: testTransactor{singleErr: errTest},
-			email:      "otp@test",
-			wantErr:    errTest,
+			storeProvider: testStoreProvider{testStore{}},
+			mailer:        testMailer{},
+			transactor:    testTransactor{singleErr: errTest},
+			email:         "otp@test",
+			wantErr:       errTest,
 		},
 		"store create otp error": {
-			store:      testStore{createOTPErr: errTest},
-			mailer:     testMailer{},
-			transactor: testTransactor{},
-			email:      "otp@test",
-			wantErr:    errTest,
+			storeProvider: testStoreProvider{testStore{createOTPErr: errTest}},
+			mailer:        testMailer{},
+			transactor:    testTransactor{},
+			email:         "otp@test",
+			wantErr:       errTest,
 		},
 		"mailer send otp request error": {
-			store:      testStore{},
-			mailer:     testMailer{sendOTPRequestErr: errTest},
-			transactor: testTransactor{},
-			email:      "otp@test",
-			wantErr:    errTest,
+			storeProvider: testStoreProvider{testStore{}},
+			mailer:        testMailer{sendOTPRequestErr: errTest},
+			transactor:    testTransactor{},
+			email:         "otp@test",
+			wantErr:       errTest,
 		},
 		"success": {
-			store:      testStore{},
-			mailer:     testMailer{},
-			transactor: testTransactor{},
-			email:      "otp@test",
-			wantErr:    nil,
+			storeProvider: testStoreProvider{testStore{}},
+			mailer:        testMailer{},
+			transactor:    testTransactor{},
+			email:         "otp@test",
+			wantErr:       nil,
 		},
 	}
 
 	for name, test := range tests {
 		t.Run(name, func(t *testing.T) {
 			service := New(&Params{
-				Store:                test.store,
+				StoreProvider:        test.storeProvider,
 				Mailer:               test.mailer,
 				OTPDuration:          15 * time.Minute,
 				OTPMaxAttempts:       3,
@@ -193,7 +197,7 @@ func TestService_ConfirmOTP(t *testing.T) {
 	user := domain.NewUser(email)
 
 	tests := map[string]struct {
-		store          store.Store
+		storeProvider  store.Provider
 		otpMaxAttempts int
 		transactor     sqlx.Transactor
 		otpID          string
@@ -201,7 +205,7 @@ func TestService_ConfirmOTP(t *testing.T) {
 		wantErr        error
 	}{
 		"invalid otp id": {
-			store:          testStore{},
+			storeProvider:  testStoreProvider{testStore{}},
 			otpMaxAttempts: 3,
 			transactor:     testTransactor{},
 			otpID:          "",
@@ -209,7 +213,7 @@ func TestService_ConfirmOTP(t *testing.T) {
 			wantErr:        uuid.ErrInvalid,
 		},
 		"invalid code": {
-			store:          testStore{},
+			storeProvider:  testStoreProvider{testStore{}},
 			otpMaxAttempts: 3,
 			transactor:     testTransactor{},
 			otpID:          otp.ID.String(),
@@ -217,7 +221,7 @@ func TestService_ConfirmOTP(t *testing.T) {
 			wantErr:        domain.ErrCodeInvalid,
 		},
 		"transactor atomic error": {
-			store:          testStore{consumeOTP: otp, getUserByEmailOrCreate: user},
+			storeProvider:  testStoreProvider{testStore{consumeOTP: otp, getUserByEmailOrCreate: user}},
 			otpMaxAttempts: 3,
 			transactor:     testTransactor{atomicErr: errTest},
 			otpID:          otp.ID.String(),
@@ -225,7 +229,7 @@ func TestService_ConfirmOTP(t *testing.T) {
 			wantErr:        errTest,
 		},
 		"store consume otp error": {
-			store:          testStore{consumeOTPErr: errTest},
+			storeProvider:  testStoreProvider{testStore{consumeOTPErr: errTest}},
 			otpMaxAttempts: 3,
 			transactor:     testTransactor{},
 			otpID:          otp.ID.String(),
@@ -233,7 +237,7 @@ func TestService_ConfirmOTP(t *testing.T) {
 			wantErr:        errTest,
 		},
 		"store consume otp not found error": {
-			store:          testStore{consumeOTPErr: sqlx.ErrNotFound},
+			storeProvider:  testStoreProvider{testStore{consumeOTPErr: sqlx.ErrNotFound}},
 			otpMaxAttempts: 3,
 			transactor:     testTransactor{},
 			otpID:          otp.ID.String(),
@@ -241,7 +245,7 @@ func TestService_ConfirmOTP(t *testing.T) {
 			wantErr:        domain.ErrCodeExpired,
 		},
 		"code expired": {
-			store:          testStore{consumeOTP: domain.NewOTP(email, -1)},
+			storeProvider:  testStoreProvider{testStore{consumeOTP: domain.NewOTP(email, -1)}},
 			otpMaxAttempts: 3,
 			transactor:     testTransactor{},
 			otpID:          otp.ID.String(),
@@ -249,7 +253,7 @@ func TestService_ConfirmOTP(t *testing.T) {
 			wantErr:        domain.ErrCodeExpired,
 		},
 		"max attempts reached": {
-			store:          testStore{consumeOTP: otp},
+			storeProvider:  testStoreProvider{testStore{consumeOTP: otp}},
 			otpMaxAttempts: 0,
 			transactor:     testTransactor{},
 			otpID:          otp.ID.String(),
@@ -257,7 +261,7 @@ func TestService_ConfirmOTP(t *testing.T) {
 			wantErr:        domain.ErrCodeExpired,
 		},
 		"code mismatch": {
-			store:          testStore{consumeOTP: otp},
+			storeProvider:  testStoreProvider{testStore{consumeOTP: otp}},
 			otpMaxAttempts: 3,
 			transactor:     testTransactor{},
 			otpID:          otp.ID.String(),
@@ -265,7 +269,7 @@ func TestService_ConfirmOTP(t *testing.T) {
 			wantErr:        domain.ErrCodeMismatched,
 		},
 		"get by email or create user store error": {
-			store:          testStore{consumeOTP: otp, getUserByEmailOrCreateErr: errTest},
+			storeProvider:  testStoreProvider{testStore{consumeOTP: otp, getUserByEmailOrCreateErr: errTest}},
 			otpMaxAttempts: 3,
 			transactor:     testTransactor{},
 			otpID:          otp.ID.String(),
@@ -273,7 +277,9 @@ func TestService_ConfirmOTP(t *testing.T) {
 			wantErr:        errTest,
 		},
 		"create refresh token store error": {
-			store:          testStore{consumeOTP: otp, getUserByEmailOrCreate: user, createRefreshTokenErr: errTest},
+			storeProvider: testStoreProvider{
+				testStore{consumeOTP: otp, getUserByEmailOrCreate: user, createRefreshTokenErr: errTest},
+			},
 			otpMaxAttempts: 3,
 			transactor:     testTransactor{},
 			otpID:          otp.ID.String(),
@@ -281,7 +287,7 @@ func TestService_ConfirmOTP(t *testing.T) {
 			wantErr:        errTest,
 		},
 		"success": {
-			store:          testStore{consumeOTP: otp, getUserByEmailOrCreate: user},
+			storeProvider:  testStoreProvider{testStore{consumeOTP: otp, getUserByEmailOrCreate: user}},
 			otpMaxAttempts: 3,
 			transactor:     testTransactor{},
 			otpID:          otp.ID.String(),
@@ -293,7 +299,7 @@ func TestService_ConfirmOTP(t *testing.T) {
 	for name, test := range tests {
 		t.Run(name, func(t *testing.T) {
 			service := New(&Params{
-				Store:                test.store,
+				StoreProvider:        test.storeProvider,
 				Mailer:               testMailer{},
 				OTPDuration:          15 * time.Minute,
 				OTPMaxAttempts:       test.otpMaxAttempts,
@@ -332,59 +338,59 @@ func TestService_RefreshAccessToken(t *testing.T) {
 	}
 
 	tests := map[string]struct {
-		store      store.Store
-		transactor sqlx.Transactor
-		refreshJWS string
-		wantErr    error
+		storeProvider store.Provider
+		transactor    sqlx.Transactor
+		refreshJWS    string
+		wantErr       error
 	}{
 		"invalid refresh jws": {
-			store:      testStore{},
-			transactor: testTransactor{},
-			refreshJWS: "invalid",
-			wantErr:    domain.ErrTokenInvalid,
+			storeProvider: testStoreProvider{testStore{}},
+			transactor:    testTransactor{},
+			refreshJWS:    "invalid",
+			wantErr:       domain.ErrTokenInvalid,
 		},
 		"expired refresh token": {
-			store:      testStore{},
-			transactor: testTransactor{},
-			refreshJWS: expiredRefreshToken.JWS,
-			wantErr:    domain.ErrTokenInvalid,
+			storeProvider: testStoreProvider{testStore{}},
+			transactor:    testTransactor{},
+			refreshJWS:    expiredRefreshToken.JWS,
+			wantErr:       domain.ErrTokenInvalid,
 		},
 		"invalid token kind": {
-			store:      testStore{},
-			transactor: testTransactor{},
-			refreshJWS: invalidKindToken.JWS,
-			wantErr:    domain.ErrTokenInvalid,
+			storeProvider: testStoreProvider{testStore{}},
+			transactor:    testTransactor{},
+			refreshJWS:    invalidKindToken.JWS,
+			wantErr:       domain.ErrTokenInvalid,
 		},
 		"transactor single error": {
-			store:      testStore{},
-			transactor: testTransactor{singleErr: errTest},
-			refreshJWS: refreshToken.JWS,
-			wantErr:    errTest,
+			storeProvider: testStoreProvider{testStore{}},
+			transactor:    testTransactor{singleErr: errTest},
+			refreshJWS:    refreshToken.JWS,
+			wantErr:       errTest,
 		},
 		"store get refresh token error": {
-			store:      testStore{getRefreshTokenErr: errTest},
-			transactor: testTransactor{},
-			refreshJWS: refreshToken.JWS,
-			wantErr:    errTest,
+			storeProvider: testStoreProvider{testStore{getRefreshTokenErr: errTest}},
+			transactor:    testTransactor{},
+			refreshJWS:    refreshToken.JWS,
+			wantErr:       errTest,
 		},
 		"store get refresh token not found error": {
-			store:      testStore{getRefreshTokenErr: sqlx.ErrNotFound},
-			transactor: testTransactor{},
-			refreshJWS: refreshToken.JWS,
-			wantErr:    domain.ErrTokenNotFound,
+			storeProvider: testStoreProvider{testStore{getRefreshTokenErr: sqlx.ErrNotFound}},
+			transactor:    testTransactor{},
+			refreshJWS:    refreshToken.JWS,
+			wantErr:       domain.ErrTokenNotFound,
 		},
 		"success": {
-			store:      testStore{},
-			transactor: testTransactor{},
-			refreshJWS: refreshToken.JWS,
-			wantErr:    nil,
+			storeProvider: testStoreProvider{testStore{}},
+			transactor:    testTransactor{},
+			refreshJWS:    refreshToken.JWS,
+			wantErr:       nil,
 		},
 	}
 
 	for name, test := range tests {
 		t.Run(name, func(t *testing.T) {
 			service := New(&Params{
-				Store:                test.store,
+				StoreProvider:        test.storeProvider,
 				Mailer:               testMailer{},
 				OTPDuration:          15 * time.Minute,
 				OTPMaxAttempts:       3,
@@ -423,53 +429,53 @@ func TestService_ListRefreshTokens(t *testing.T) {
 	}
 
 	tests := map[string]struct {
-		store      store.Store
-		transactor sqlx.Transactor
-		accessJWS  string
-		wantErr    error
+		storeProvider store.Provider
+		transactor    sqlx.Transactor
+		accessJWS     string
+		wantErr       error
 	}{
 		"invalid access jws": {
-			store:      testStore{},
-			transactor: testTransactor{},
-			accessJWS:  "invalid",
-			wantErr:    domain.ErrTokenInvalid,
+			storeProvider: testStoreProvider{testStore{}},
+			transactor:    testTransactor{},
+			accessJWS:     "invalid",
+			wantErr:       domain.ErrTokenInvalid,
 		},
 		"expired access token": {
-			store:      testStore{},
-			transactor: testTransactor{},
-			accessJWS:  expiredAccessToken.JWS,
-			wantErr:    domain.ErrTokenInvalid,
+			storeProvider: testStoreProvider{testStore{}},
+			transactor:    testTransactor{},
+			accessJWS:     expiredAccessToken.JWS,
+			wantErr:       domain.ErrTokenInvalid,
 		},
 		"invalid token kind": {
-			store:      testStore{},
-			transactor: testTransactor{},
-			accessJWS:  invalidKindToken.JWS,
-			wantErr:    domain.ErrTokenInvalid,
+			storeProvider: testStoreProvider{testStore{}},
+			transactor:    testTransactor{},
+			accessJWS:     invalidKindToken.JWS,
+			wantErr:       domain.ErrTokenInvalid,
 		},
 		"transactor single error": {
-			store:      testStore{},
-			transactor: testTransactor{singleErr: errTest},
-			accessJWS:  accessToken.JWS,
-			wantErr:    errTest,
+			storeProvider: testStoreProvider{testStore{}},
+			transactor:    testTransactor{singleErr: errTest},
+			accessJWS:     accessToken.JWS,
+			wantErr:       errTest,
 		},
 		"store list refresh tokens error": {
-			store:      testStore{listRefreshTokensErr: errTest},
-			transactor: testTransactor{},
-			accessJWS:  accessToken.JWS,
-			wantErr:    errTest,
+			storeProvider: testStoreProvider{testStore{listRefreshTokensErr: errTest}},
+			transactor:    testTransactor{},
+			accessJWS:     accessToken.JWS,
+			wantErr:       errTest,
 		},
 		"success": {
-			store:      testStore{},
-			transactor: testTransactor{},
-			accessJWS:  accessToken.JWS,
-			wantErr:    nil,
+			storeProvider: testStoreProvider{testStore{}},
+			transactor:    testTransactor{},
+			accessJWS:     accessToken.JWS,
+			wantErr:       nil,
 		},
 	}
 
 	for name, test := range tests {
 		t.Run(name, func(t *testing.T) {
 			service := New(&Params{
-				Store:                test.store,
+				StoreProvider:        test.storeProvider,
 				Mailer:               testMailer{},
 				OTPDuration:          15 * time.Minute,
 				OTPMaxAttempts:       3,
@@ -513,56 +519,56 @@ func TestService_DeleteRefreshToken(t *testing.T) {
 	}
 
 	tests := map[string]struct {
-		store          store.Store
+		storeProvider  store.Provider
 		transactor     sqlx.Transactor
 		accessJWS      string
 		refreshTokenID string
 		wantErr        error
 	}{
 		"invalid access jws": {
-			store:          testStore{},
+			storeProvider:  testStoreProvider{testStore{}},
 			transactor:     testTransactor{},
 			accessJWS:      "invalid",
 			refreshTokenID: refreshToken.ID.String(),
 			wantErr:        domain.ErrTokenInvalid,
 		},
 		"expired access token": {
-			store:          testStore{},
+			storeProvider:  testStoreProvider{testStore{}},
 			transactor:     testTransactor{},
 			accessJWS:      expiredAccessToken.JWS,
 			refreshTokenID: refreshToken.ID.String(),
 			wantErr:        domain.ErrTokenInvalid,
 		},
 		"invalid token kind": {
-			store:          testStore{},
+			storeProvider:  testStoreProvider{testStore{}},
 			transactor:     testTransactor{},
 			accessJWS:      invalidKindToken.JWS,
 			refreshTokenID: refreshToken.ID.String(),
 			wantErr:        domain.ErrTokenInvalid,
 		},
 		"invalid refresh token id": {
-			store:          testStore{},
+			storeProvider:  testStoreProvider{testStore{}},
 			transactor:     testTransactor{},
 			accessJWS:      invalidKindToken.JWS,
 			refreshTokenID: "invalid",
 			wantErr:        domain.ErrTokenInvalid,
 		},
 		"transactor single error": {
-			store:          testStore{},
+			storeProvider:  testStoreProvider{testStore{}},
 			transactor:     testTransactor{singleErr: errTest},
 			accessJWS:      accessToken.JWS,
 			refreshTokenID: refreshToken.ID.String(),
 			wantErr:        errTest,
 		},
 		"store delete refresh token error": {
-			store:          testStore{deleteRefreshTokenErr: errTest},
+			storeProvider:  testStoreProvider{testStore{deleteRefreshTokenErr: errTest}},
 			transactor:     testTransactor{},
 			accessJWS:      accessToken.JWS,
 			refreshTokenID: refreshToken.ID.String(),
 			wantErr:        errTest,
 		},
 		"success": {
-			store:          testStore{},
+			storeProvider:  testStoreProvider{testStore{}},
 			transactor:     testTransactor{},
 			accessJWS:      accessToken.JWS,
 			refreshTokenID: refreshToken.ID.String(),
@@ -573,7 +579,7 @@ func TestService_DeleteRefreshToken(t *testing.T) {
 	for name, test := range tests {
 		t.Run(name, func(t *testing.T) {
 			service := New(&Params{
-				Store:                test.store,
+				StoreProvider:        test.storeProvider,
 				Mailer:               testMailer{},
 				OTPDuration:          15 * time.Minute,
 				OTPMaxAttempts:       3,
@@ -612,67 +618,67 @@ func TestService_DeleteUser(t *testing.T) {
 	}
 
 	tests := map[string]struct {
-		store      store.Store
-		transactor sqlx.Transactor
-		accessJWS  string
-		userID     string
-		wantErr    error
+		storeProvider store.Provider
+		transactor    sqlx.Transactor
+		accessJWS     string
+		userID        string
+		wantErr       error
 	}{
 		"invalid access jws": {
-			store:      testStore{},
-			transactor: testTransactor{},
-			accessJWS:  "invalid",
-			userID:     user.ID.String(),
-			wantErr:    domain.ErrTokenInvalid,
+			storeProvider: testStoreProvider{testStore{}},
+			transactor:    testTransactor{},
+			accessJWS:     "invalid",
+			userID:        user.ID.String(),
+			wantErr:       domain.ErrTokenInvalid,
 		},
 		"expired access token": {
-			store:      testStore{},
-			transactor: testTransactor{},
-			accessJWS:  expiredAccessToken.JWS,
-			userID:     user.ID.String(),
-			wantErr:    domain.ErrTokenInvalid,
+			storeProvider: testStoreProvider{testStore{}},
+			transactor:    testTransactor{},
+			accessJWS:     expiredAccessToken.JWS,
+			userID:        user.ID.String(),
+			wantErr:       domain.ErrTokenInvalid,
 		},
 		"invalid token kind": {
-			store:      testStore{},
-			transactor: testTransactor{},
-			accessJWS:  invalidKindToken.JWS,
-			userID:     user.ID.String(),
-			wantErr:    domain.ErrTokenInvalid,
+			storeProvider: testStoreProvider{testStore{}},
+			transactor:    testTransactor{},
+			accessJWS:     invalidKindToken.JWS,
+			userID:        user.ID.String(),
+			wantErr:       domain.ErrTokenInvalid,
 		},
 		"invalid user id": {
-			store:      testStore{},
-			transactor: testTransactor{},
-			accessJWS:  invalidKindToken.JWS,
-			userID:     "invalid",
-			wantErr:    domain.ErrTokenInvalid,
+			storeProvider: testStoreProvider{testStore{}},
+			transactor:    testTransactor{},
+			accessJWS:     invalidKindToken.JWS,
+			userID:        "invalid",
+			wantErr:       domain.ErrTokenInvalid,
 		},
 		"transactor single error": {
-			store:      testStore{},
-			transactor: testTransactor{singleErr: errTest},
-			accessJWS:  accessToken.JWS,
-			userID:     user.ID.String(),
-			wantErr:    errTest,
+			storeProvider: testStoreProvider{testStore{}},
+			transactor:    testTransactor{singleErr: errTest},
+			accessJWS:     accessToken.JWS,
+			userID:        user.ID.String(),
+			wantErr:       errTest,
 		},
 		"store delete user error": {
-			store:      testStore{deleteUserErr: errTest},
-			transactor: testTransactor{},
-			accessJWS:  accessToken.JWS,
-			userID:     user.ID.String(),
-			wantErr:    errTest,
+			storeProvider: testStoreProvider{testStore{deleteUserErr: errTest}},
+			transactor:    testTransactor{},
+			accessJWS:     accessToken.JWS,
+			userID:        user.ID.String(),
+			wantErr:       errTest,
 		},
 		"success": {
-			store:      testStore{},
-			transactor: testTransactor{},
-			accessJWS:  accessToken.JWS,
-			userID:     user.ID.String(),
-			wantErr:    nil,
+			storeProvider: testStoreProvider{testStore{}},
+			transactor:    testTransactor{},
+			accessJWS:     accessToken.JWS,
+			userID:        user.ID.String(),
+			wantErr:       nil,
 		},
 	}
 
 	for name, test := range tests {
 		t.Run(name, func(t *testing.T) {
 			service := New(&Params{
-				Store:                test.store,
+				StoreProvider:        test.storeProvider,
 				Mailer:               testMailer{},
 				OTPDuration:          15 * time.Minute,
 				OTPMaxAttempts:       3,

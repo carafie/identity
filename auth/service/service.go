@@ -17,8 +17,8 @@ import (
 )
 
 type Service struct {
-	store  store.Store
-	mailer mailer.Mailer
+	storeProvider store.Provider
+	mailer        mailer.Mailer
 
 	otpDuration    time.Duration
 	otpMaxAttempts int
@@ -32,8 +32,8 @@ type Service struct {
 }
 
 type Params struct {
-	Store  store.Store
-	Mailer mailer.Mailer
+	StoreProvider store.Provider
+	Mailer        mailer.Mailer
 
 	OTPDuration    time.Duration
 	OTPMaxAttempts int
@@ -47,8 +47,8 @@ type Params struct {
 }
 
 func New(params *Params) *Service {
-	if params.Store == nil {
-		panic("store cannot be nil")
+	if params.StoreProvider == nil {
+		panic("store provider cannot be nil")
 	}
 	if params.Mailer == nil {
 		panic("mailer cannot be nil")
@@ -63,8 +63,8 @@ func New(params *Params) *Service {
 		params.Logger = slog.New(slog.DiscardHandler)
 	}
 	return &Service{
-		store:  params.Store,
-		mailer: params.Mailer,
+		storeProvider: params.StoreProvider,
+		mailer:        params.Mailer,
 
 		otpDuration:    params.OTPDuration,
 		otpMaxAttempts: params.OTPMaxAttempts,
@@ -91,7 +91,8 @@ func (s *Service) RequestOTP(ctx context.Context, email string) (*domain.OTP, er
 	l = s.logger.With(slogx.OTPID(otp.ID))
 
 	err = s.transactor.Single(ctx, func(ctx context.Context, executor sqlx.Executor) error {
-		if err := s.store.CreateOTP(ctx, executor, otp); err != nil {
+		store := s.storeProvider.New(executor)
+		if err := store.CreateOTP(ctx, otp); err != nil {
 			l.ErrorContext(ctx, "create otp in store", slogx.Error(err))
 			return err
 		}
@@ -130,7 +131,8 @@ func (s *Service) ConfirmOTP(ctx context.Context, otpID, code string) (
 		refreshToken *domain.RefreshToken
 	)
 	err = s.transactor.Atomic(ctx, func(ctx context.Context, executor sqlx.Executor) (sqlx.TCL, error) {
-		otp, err := s.store.ConsumeOTP(ctx, executor, parsedOTPID)
+		store := s.storeProvider.New(executor)
+		otp, err := store.ConsumeOTP(ctx, parsedOTPID)
 		if err != nil {
 			if errors.Is(err, sqlx.ErrNotFound) {
 				l.WarnContext(ctx, "consume otp in store", slogx.Error(err))
@@ -146,7 +148,7 @@ func (s *Service) ConfirmOTP(ctx context.Context, otpID, code string) (
 			return sqlx.Rollback, err
 		}
 
-		user, err := s.store.GetUserByEmailOrCreate(ctx, executor, domain.NewUser(otp.Email))
+		user, err := store.GetUserByEmailOrCreate(ctx, domain.NewUser(otp.Email))
 		if err != nil {
 			l.ErrorContext(ctx, "get user by email or create in store", slogx.Error(err))
 			return sqlx.Rollback, err
@@ -162,7 +164,7 @@ func (s *Service) ConfirmOTP(ctx context.Context, otpID, code string) (
 			l.ErrorContext(ctx, "sign refresh token", slogx.Error(err))
 			return sqlx.Rollback, err
 		}
-		if err := s.store.CreateRefreshToken(ctx, executor, refresh); err != nil {
+		if err := store.CreateRefreshToken(ctx, refresh); err != nil {
 			l.ErrorContext(ctx, "create refresh token in store", slogx.Error(err))
 			return sqlx.Rollback, err
 		}
@@ -185,7 +187,8 @@ func (s *Service) RefreshAccessToken(ctx context.Context, refreshJWS string) (*d
 
 	var exists bool
 	err = s.transactor.Single(ctx, func(ctx context.Context, executor sqlx.Executor) error {
-		if _, err := s.store.GetRefreshToken(ctx, executor, refreshToken.ID); err != nil {
+		store := s.storeProvider.New(executor)
+		if _, err := store.GetRefreshToken(ctx, refreshToken.ID); err != nil {
 			if errors.Is(err, sqlx.ErrNotFound) {
 				l.WarnContext(ctx, "is refresh token in store", slogx.Error(err))
 				exists = false
@@ -219,7 +222,8 @@ func (s *Service) ListRefreshTokens(ctx context.Context, accessJWS string) ([]*d
 
 	var refreshTokens []*domain.RefreshToken
 	err = s.transactor.Single(ctx, func(ctx context.Context, executor sqlx.Executor) error {
-		tokens, err := s.store.ListRefreshTokens(ctx, executor, accessToken.UserID)
+		store := s.storeProvider.New(executor)
+		tokens, err := store.ListRefreshTokens(ctx, accessToken.UserID)
 		if err != nil {
 			l.ErrorContext(ctx, "list refresh tokens from store", slogx.Error(err))
 			return err
@@ -246,7 +250,8 @@ func (s *Service) DeleteRefreshToken(ctx context.Context, accessJWS, refreshToke
 	}
 
 	return s.transactor.Single(ctx, func(ctx context.Context, executor sqlx.Executor) error {
-		if err := s.store.DeleteRefreshToken(ctx, executor, accessToken.UserID, parsedRefreshTokenID); err != nil {
+		store := s.storeProvider.New(executor)
+		if err := store.DeleteRefreshToken(ctx, accessToken.UserID, parsedRefreshTokenID); err != nil {
 			if errors.Is(err, sqlx.ErrNotFound) {
 				l.WarnContext(ctx, "delete refresh token from store", slogx.Error(err))
 				return domain.ErrTokenNotFound
@@ -276,7 +281,8 @@ func (s *Service) DeleteUser(ctx context.Context, accessJWS, userID string) erro
 	}
 
 	return s.transactor.Single(ctx, func(ctx context.Context, executor sqlx.Executor) error {
-		if err := s.store.DeleteUser(ctx, executor, parsedUserID); err != nil {
+		store := s.storeProvider.New(executor)
+		if err := store.DeleteUser(ctx, parsedUserID); err != nil {
 			if errors.Is(err, sqlx.ErrNotFound) {
 				l.WarnContext(ctx, "delete user from store", slogx.Error(err))
 				return domain.ErrUserNotFound

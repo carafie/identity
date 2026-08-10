@@ -9,16 +9,18 @@ import (
 )
 
 type Store interface {
-	CreateOTP(ctx context.Context, executor sqlx.Executor, otp *domain.OTP) error
-	ConsumeOTP(ctx context.Context, executor sqlx.Executor, otpID uuid.UUID) (*domain.OTP, error)
+	CreateOTP(ctx context.Context, otp *domain.OTP) error
+	ConsumeOTP(ctx context.Context, otpID uuid.UUID) (*domain.OTP, error)
 
-	GetUserByEmailOrCreate(ctx context.Context, executor sqlx.Executor, user *domain.User) (*domain.User, error)
-	DeleteUser(ctx context.Context, executor sqlx.Executor, userID uuid.UUID) error
+	GetUserByEmailOrCreate(ctx context.Context, user *domain.User) (*domain.User, error)
+	DeleteUser(ctx context.Context, userID uuid.UUID) error
 
-	CreateRefreshToken(ctx context.Context, executor sqlx.Executor, token *domain.RefreshToken) error
-	GetRefreshToken(ctx context.Context, executor sqlx.Executor, refreshTokenID uuid.UUID) (
-		*domain.RefreshToken, error,
-	)
-	ListRefreshTokens(ctx context.Context, executor sqlx.Executor, userID uuid.UUID) ([]*domain.RefreshToken, error)
-	DeleteRefreshToken(ctx context.Context, executor sqlx.Executor, userID, refreshTokenID uuid.UUID) error
+	CreateRefreshToken(ctx context.Context, token *domain.RefreshToken) error
+	GetRefreshToken(ctx context.Context, refreshTokenID uuid.UUID) (*domain.RefreshToken, error)
+	ListRefreshTokens(ctx context.Context, userID uuid.UUID) ([]*domain.RefreshToken, error)
+	DeleteRefreshToken(ctx context.Context, userID, refreshTokenID uuid.UUID) error
+}
+
+type Provider interface {
+	New(executor sqlx.Executor) Store
 }
