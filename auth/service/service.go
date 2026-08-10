@@ -9,7 +9,6 @@ import (
 	"github.com/carafie/identity/auth/domain"
 	"github.com/carafie/identity/auth/mailer"
 	"github.com/carafie/identity/auth/store"
-	"github.com/carafie/identity/platform/jwt"
 	"github.com/carafie/identity/platform/mail"
 	"github.com/carafie/identity/platform/requestid"
 	"github.com/carafie/identity/platform/slogx"
@@ -24,7 +23,7 @@ type Service struct {
 	otpDuration    time.Duration
 	otpMaxAttempts int
 
-	tokenManager         *jwt.Manager
+	tokenManager         *domain.TokenManager
 	tokenAccessDuration  time.Duration
 	tokenRefreshDuration time.Duration
 
@@ -39,7 +38,7 @@ type Params struct {
 	OTPDuration    time.Duration
 	OTPMaxAttempts int
 
-	TokenManager         *jwt.Manager
+	TokenManager         *domain.TokenManager
 	TokenAccessDuration  time.Duration
 	TokenRefreshDuration time.Duration
 
@@ -110,7 +109,9 @@ func (s *Service) RequestOTP(ctx context.Context, email string) (*domain.OTP, er
 	return otp, nil
 }
 
-func (s *Service) ConfirmOTP(ctx context.Context, otpID, code string) (*domain.AccessToken, *domain.RefreshToken, error) {
+func (s *Service) ConfirmOTP(ctx context.Context, otpID, code string) (
+	*domain.AccessToken, *domain.RefreshToken, error,
+) {
 	l := s.logger.With(slogx.RequestID(requestid.FromContext(ctx)))
 
 	parsedOTPID, err := uuid.Parse(otpID)
@@ -125,8 +126,8 @@ func (s *Service) ConfirmOTP(ctx context.Context, otpID, code string) (*domain.A
 	}
 
 	var (
-		access  *domain.AccessToken
-		refresh *domain.RefreshToken
+		accessToken  *domain.AccessToken
+		refreshToken *domain.RefreshToken
 	)
 	err = s.transactor.Atomic(ctx, func(ctx context.Context, executor sqlx.Executor) (sqlx.TCL, error) {
 		otp, err := s.store.ConsumeOTP(ctx, executor, parsedOTPID)
@@ -151,45 +152,40 @@ func (s *Service) ConfirmOTP(ctx context.Context, otpID, code string) (*domain.A
 			return sqlx.Rollback, err
 		}
 
-		innerAccess, err := s.issueAccessToken(user)
-		if err != nil {
-			l.ErrorContext(ctx, "issue access token", slogx.Error(err))
+		access := domain.NewAccessToken(user.ID, user.Email, s.tokenAccessDuration)
+		if err := s.tokenManager.SignAccess(access); err != nil {
+			l.ErrorContext(ctx, "sign access token", slogx.Error(err))
 			return sqlx.Rollback, err
 		}
-		innerRefresh, err := s.issueRefreshToken(user)
-		if err != nil {
-			l.ErrorContext(ctx, "issue refresh token", slogx.Error(err))
+		refresh := domain.NewRefreshToken(user.ID, user.Email, s.tokenRefreshDuration)
+		if err := s.tokenManager.SignAccess(access); err != nil {
+			l.ErrorContext(ctx, "sign refresh token", slogx.Error(err))
 			return sqlx.Rollback, err
 		}
-		if err := s.store.CreateRefreshToken(ctx, executor, innerRefresh); err != nil {
+		if err := s.store.CreateRefreshToken(ctx, executor, refresh); err != nil {
 			l.ErrorContext(ctx, "create refresh token in store", slogx.Error(err))
 			return sqlx.Rollback, err
 		}
-		access = innerAccess
-		refresh = innerRefresh
+		accessToken = access
+		refreshToken = refresh
 
 		return sqlx.Commit, nil
 	})
-	return access, refresh, err
+	return accessToken, refreshToken, err
 }
 
 func (s *Service) RefreshAccessToken(ctx context.Context, refreshJWS string) (*domain.AccessToken, error) {
 	l := s.logger.With(slogx.RequestID(requestid.FromContext(ctx)))
 
-	refreshToken, err := s.tokenManager.Parse(refreshJWS) // expired tokens fail as well
+	refreshToken, err := s.tokenManager.ParseRefresh(refreshJWS)
 	if err != nil {
 		l.WarnContext(ctx, "parse refresh token", slogx.Error(err))
-		return nil, domain.ErrTokenInvalid
-	}
-	if refreshToken.Fields.Kind != jwt.KindRefresh {
-		l.WarnContext(ctx, "token kind mismatch")
 		return nil, domain.ErrTokenInvalid
 	}
 
 	var exists bool
 	err = s.transactor.Single(ctx, func(ctx context.Context, executor sqlx.Executor) error {
-		_, err := s.store.GetRefreshToken(ctx, executor, refreshToken.Fields.ID)
-		if err != nil {
+		if _, err := s.store.GetRefreshToken(ctx, executor, refreshToken.ID); err != nil {
 			if errors.Is(err, sqlx.ErrNotFound) {
 				l.WarnContext(ctx, "is refresh token in store", slogx.Error(err))
 				exists = false
@@ -208,56 +204,49 @@ func (s *Service) RefreshAccessToken(ctx context.Context, refreshJWS string) (*d
 		return nil, domain.ErrTokenNotFound
 	}
 
-	return s.issueAccessToken(domain.LoadUser(refreshToken.Fields.UserID, refreshToken.Fields.Email))
+	accessToken := domain.NewAccessToken(refreshToken.UserID, refreshToken.Email, s.tokenAccessDuration)
+	return accessToken, s.tokenManager.SignAccess(accessToken)
 }
 
-func (s *Service) ListRefreshTokens(ctx context.Context, accessJWS string) ([]*domain.RefreshTokenFields, error) {
+func (s *Service) ListRefreshTokens(ctx context.Context, accessJWS string) ([]*domain.RefreshToken, error) {
 	l := s.logger.With(slogx.RequestID(requestid.FromContext(ctx)))
 
-	accessToken, err := s.tokenManager.Parse(accessJWS) // expired tokens fail as well
+	accessToken, err := s.tokenManager.ParseAccess(accessJWS)
 	if err != nil {
 		l.WarnContext(ctx, "parse access token", slogx.Error(err))
 		return nil, domain.ErrTokenInvalid
 	}
-	if accessToken.Fields.Kind != jwt.KindAccess {
-		l.WarnContext(ctx, "token kind mismatch")
-		return nil, domain.ErrTokenInvalid
-	}
 
-	var accessTokens []*domain.AccessTokenFields
+	var refreshTokens []*domain.RefreshToken
 	err = s.transactor.Single(ctx, func(ctx context.Context, executor sqlx.Executor) error {
-		tokens, err := s.store.ListRefreshTokens(ctx, executor, accessToken.Fields.UserID)
+		tokens, err := s.store.ListRefreshTokens(ctx, executor, accessToken.UserID)
 		if err != nil {
 			l.ErrorContext(ctx, "list refresh tokens from store", slogx.Error(err))
 			return err
 		}
-		accessTokens = tokens
+		refreshTokens = tokens
 		return nil
 	})
-	return accessTokens, err
+	return refreshTokens, err
 }
 
 func (s *Service) DeleteRefreshToken(ctx context.Context, accessJWS, refreshTokenID string) error {
 	l := s.logger.With(slogx.RequestID(requestid.FromContext(ctx)))
 
-	accessToken, err := s.tokenManager.Parse(accessJWS) // expired tokens fail as well
+	accessToken, err := s.tokenManager.ParseAccess(accessJWS)
 	if err != nil {
 		l.WarnContext(ctx, "parse access token", slogx.Error(err))
 		return domain.ErrTokenInvalid
 	}
-	if accessToken.Fields.Kind != jwt.KindAccess {
-		l.WarnContext(ctx, "token kind mismatch")
-		return domain.ErrTokenInvalid
-	}
 
-	tokenID, err := uuid.Parse(refreshTokenID)
+	parsedRefreshTokenID, err := uuid.Parse(refreshTokenID)
 	if err != nil {
 		l.WarnContext(ctx, "invalid refresh token id")
 		return domain.ErrTokenInvalid
 	}
 
 	return s.transactor.Single(ctx, func(ctx context.Context, executor sqlx.Executor) error {
-		if err := s.store.DeleteRefreshToken(ctx, executor, accessToken.Fields.UserID, tokenID); err != nil {
+		if err := s.store.DeleteRefreshToken(ctx, executor, accessToken.UserID, parsedRefreshTokenID); err != nil {
 			if errors.Is(err, sqlx.ErrNotFound) {
 				l.WarnContext(ctx, "delete refresh token from store", slogx.Error(err))
 				return domain.ErrTokenNotFound
@@ -272,13 +261,9 @@ func (s *Service) DeleteRefreshToken(ctx context.Context, accessJWS, refreshToke
 func (s *Service) DeleteUser(ctx context.Context, accessJWS, userID string) error {
 	l := s.logger.With(slogx.RequestID(requestid.FromContext(ctx)))
 
-	accessToken, err := s.tokenManager.Parse(accessJWS) // expired tokens fail as well
+	accessToken, err := s.tokenManager.ParseAccess(accessJWS)
 	if err != nil {
 		l.WarnContext(ctx, "parse access token", slogx.Error(err))
-		return domain.ErrTokenInvalid
-	}
-	if accessToken.Fields.Kind != jwt.KindAccess {
-		l.WarnContext(ctx, "token kind mismatch")
 		return domain.ErrTokenInvalid
 	}
 
@@ -286,8 +271,7 @@ func (s *Service) DeleteUser(ctx context.Context, accessJWS, userID string) erro
 	if err != nil {
 		return domain.ErrUserNotFound
 	}
-	if parsedUserID != accessToken.Fields.UserID {
-		l.WarnContext(ctx, "user id mismatch")
+	if parsedUserID != accessToken.UserID {
 		return domain.ErrUserNotFound
 	}
 
@@ -302,16 +286,4 @@ func (s *Service) DeleteUser(ctx context.Context, accessJWS, userID string) erro
 		}
 		return nil
 	})
-}
-
-func (s *Service) issueAccessToken(user *domain.User) (*domain.AccessToken, error) {
-	return s.tokenManager.Sign(
-		jwt.NewTokenFields(user.ID, user.Email, jwt.KindAccess, s.tokenAccessDuration),
-	)
-}
-
-func (s *Service) issueRefreshToken(user *domain.User) (*domain.AccessToken, error) {
-	return s.tokenManager.Sign(
-		jwt.NewTokenFields(user.ID, user.Email, jwt.KindRefresh, s.tokenRefreshDuration),
-	)
 }

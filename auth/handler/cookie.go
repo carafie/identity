@@ -7,12 +7,12 @@ import (
 	"github.com/carafie/identity/platform/clock"
 )
 
-func SetRefreshCookie(w http.ResponseWriter, token *domain.RefreshToken) {
+func SetRefreshCookie(w http.ResponseWriter, refreshToken *domain.RefreshToken) {
 	http.SetCookie(w, &http.Cookie{
 		Name:     "refresh_token",
-		Value:    token.JWS,
+		Value:    refreshToken.JWS,
 		Path:     "/auth/tokens/refresh",
-		MaxAge:   clock.SecondsUntil(token.Fields.ExpiresAt),
+		MaxAge:   clock.SecondsUntil(refreshToken.ExpiresAt),
 		Secure:   true,
 		HttpOnly: true,
 		SameSite: http.SameSiteLaxMode,

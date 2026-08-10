@@ -12,7 +12,6 @@ import (
 	"github.com/carafie/identity/auth/domain"
 	"github.com/carafie/identity/auth/mailer"
 	"github.com/carafie/identity/auth/store"
-	"github.com/carafie/identity/platform/jwt"
 	"github.com/carafie/identity/platform/mail"
 	"github.com/carafie/identity/platform/sqlx"
 	"github.com/carafie/identity/platform/uuid"
@@ -30,9 +29,9 @@ type testStore struct {
 	deleteUserErr             error
 
 	createRefreshTokenErr error
-	getRefreshToken       *domain.RefreshTokenFields
+	getRefreshToken       *domain.RefreshToken
 	getRefreshTokenErr    error
-	listRefreshTokens     []*domain.AccessTokenFields
+	listRefreshTokens     []*domain.RefreshToken
 	listRefreshTokensErr  error
 	deleteRefreshTokenErr error
 }
@@ -60,14 +59,14 @@ func (s testStore) CreateRefreshToken(ctx context.Context, executor sqlx.Executo
 }
 
 func (s testStore) GetRefreshToken(ctx context.Context, executor sqlx.Executor, refreshTokenID uuid.UUID) (
-	*domain.RefreshTokenFields, error,
+	*domain.RefreshToken, error,
 ) {
 	return s.getRefreshToken, s.getRefreshTokenErr
 }
 
 func (s testStore) ListRefreshTokens(
 	ctx context.Context, executor sqlx.Executor, userID uuid.UUID,
-) ([]*domain.RefreshTokenFields, error) {
+) ([]*domain.RefreshToken, error) {
 	return s.listRefreshTokens, s.listRefreshTokensErr
 }
 
@@ -87,13 +86,13 @@ func (m testMailer) SendOTPRequest(ctx context.Context, otp *domain.OTP) error {
 
 var _ mailer.Mailer = testMailer{}
 
-var testJWTManager = func(t *testing.T) *jwt.Manager {
+var testJWTManager = func(t *testing.T) *domain.TokenManager {
 	t.Helper()
 	publicKey, privateKey, err := ed25519.GenerateKey(rand.Reader)
 	if err != nil {
 		t.Fatalf("failed to generate key pair: %v", err)
 	}
-	return jwt.NewManager(publicKey, privateKey)
+	return domain.NewTokenManager(publicKey, privateKey)
 }
 
 type testTransactor struct {
@@ -319,22 +318,16 @@ func TestService_RefreshAccessToken(t *testing.T) {
 	tokenManager := testJWTManager(t)
 	user := domain.NewUser("token@test")
 
-	refreshToken, err := tokenManager.Sign(
-		jwt.NewTokenFields(user.ID, user.Email, jwt.KindRefresh, time.Hour),
-	)
-	if err != nil {
+	refreshToken := domain.NewRefreshToken(user.ID, user.Email, time.Hour)
+	if err := tokenManager.SignRefresh(refreshToken); err != nil {
 		t.Fatalf("failed to sign token: %v", err)
 	}
-	expiredRefreshToken, err := tokenManager.Sign(
-		jwt.NewTokenFields(user.ID, user.Email, jwt.KindRefresh, -time.Hour),
-	)
-	if err != nil {
+	expiredRefreshToken := domain.NewRefreshToken(user.ID, user.Email, -time.Hour)
+	if err := tokenManager.SignRefresh(expiredRefreshToken); err != nil {
 		t.Fatalf("failed to sign token: %v", err)
 	}
-	invalidKindToken, err := tokenManager.Sign(
-		jwt.NewTokenFields(user.ID, user.Email, jwt.KindAccess, time.Hour),
-	)
-	if err != nil {
+	invalidKindToken := domain.NewAccessToken(user.ID, user.Email, time.Hour)
+	if err := tokenManager.SignAccess(invalidKindToken); err != nil {
 		t.Fatalf("failed to sign token: %v", err)
 	}
 
@@ -416,22 +409,16 @@ func TestService_ListRefreshTokens(t *testing.T) {
 	tokenManager := testJWTManager(t)
 	user := domain.NewUser("token@test")
 
-	accessToken, err := tokenManager.Sign(
-		jwt.NewTokenFields(user.ID, user.Email, jwt.KindAccess, time.Hour),
-	)
-	if err != nil {
+	accessToken := domain.NewAccessToken(user.ID, user.Email, time.Hour)
+	if err := tokenManager.SignAccess(accessToken); err != nil {
 		t.Fatalf("failed to sign token: %v", err)
 	}
-	expiredAccessToken, err := tokenManager.Sign(
-		jwt.NewTokenFields(user.ID, user.Email, jwt.KindAccess, -time.Hour),
-	)
-	if err != nil {
+	expiredAccessToken := domain.NewAccessToken(user.ID, user.Email, -time.Hour)
+	if err := tokenManager.SignAccess(expiredAccessToken); err != nil {
 		t.Fatalf("failed to sign token: %v", err)
 	}
-	invalidKindToken, err := tokenManager.Sign(
-		jwt.NewTokenFields(user.ID, user.Email, jwt.KindRefresh, time.Hour),
-	)
-	if err != nil {
+	invalidKindToken := domain.NewRefreshToken(user.ID, user.Email, time.Hour)
+	if err := tokenManager.SignRefresh(invalidKindToken); err != nil {
 		t.Fatalf("failed to sign token: %v", err)
 	}
 
@@ -507,29 +494,21 @@ func TestService_DeleteRefreshToken(t *testing.T) {
 	tokenManager := testJWTManager(t)
 	user := domain.NewUser("token@test")
 
-	refreshToken, err := tokenManager.Sign(
-		jwt.NewTokenFields(user.ID, user.Email, jwt.KindRefresh, time.Hour),
-	)
-	if err != nil {
+	refreshToken := domain.NewRefreshToken(user.ID, user.Email, time.Hour)
+	if err := tokenManager.SignRefresh(refreshToken); err != nil {
 		t.Fatalf("failed to sign token: %v", err)
 	}
 
-	accessToken, err := tokenManager.Sign(
-		jwt.NewTokenFields(user.ID, user.Email, jwt.KindAccess, time.Hour),
-	)
-	if err != nil {
+	accessToken := domain.NewAccessToken(user.ID, user.Email, time.Hour)
+	if err := tokenManager.SignAccess(accessToken); err != nil {
 		t.Fatalf("failed to sign token: %v", err)
 	}
-	expiredAccessToken, err := tokenManager.Sign(
-		jwt.NewTokenFields(user.ID, user.Email, jwt.KindAccess, -time.Hour),
-	)
-	if err != nil {
+	expiredAccessToken := domain.NewAccessToken(user.ID, user.Email, -time.Hour)
+	if err := tokenManager.SignAccess(expiredAccessToken); err != nil {
 		t.Fatalf("failed to sign token: %v", err)
 	}
-	invalidKindToken, err := tokenManager.Sign(
-		jwt.NewTokenFields(user.ID, user.Email, jwt.KindRefresh, time.Hour),
-	)
-	if err != nil {
+	invalidKindToken := domain.NewRefreshToken(user.ID, user.Email, time.Hour)
+	if err := tokenManager.SignRefresh(invalidKindToken); err != nil {
 		t.Fatalf("failed to sign token: %v", err)
 	}
 
@@ -544,21 +523,21 @@ func TestService_DeleteRefreshToken(t *testing.T) {
 			store:          testStore{},
 			transactor:     testTransactor{},
 			accessJWS:      "invalid",
-			refreshTokenID: refreshToken.Fields.ID.String(),
+			refreshTokenID: refreshToken.ID.String(),
 			wantErr:        domain.ErrTokenInvalid,
 		},
 		"expired access token": {
 			store:          testStore{},
 			transactor:     testTransactor{},
 			accessJWS:      expiredAccessToken.JWS,
-			refreshTokenID: refreshToken.Fields.ID.String(),
+			refreshTokenID: refreshToken.ID.String(),
 			wantErr:        domain.ErrTokenInvalid,
 		},
 		"invalid token kind": {
 			store:          testStore{},
 			transactor:     testTransactor{},
 			accessJWS:      invalidKindToken.JWS,
-			refreshTokenID: refreshToken.Fields.ID.String(),
+			refreshTokenID: refreshToken.ID.String(),
 			wantErr:        domain.ErrTokenInvalid,
 		},
 		"invalid refresh token id": {
@@ -572,21 +551,21 @@ func TestService_DeleteRefreshToken(t *testing.T) {
 			store:          testStore{},
 			transactor:     testTransactor{singleErr: errTest},
 			accessJWS:      accessToken.JWS,
-			refreshTokenID: refreshToken.Fields.ID.String(),
+			refreshTokenID: refreshToken.ID.String(),
 			wantErr:        errTest,
 		},
 		"store delete refresh token error": {
 			store:          testStore{deleteRefreshTokenErr: errTest},
 			transactor:     testTransactor{},
 			accessJWS:      accessToken.JWS,
-			refreshTokenID: refreshToken.Fields.ID.String(),
+			refreshTokenID: refreshToken.ID.String(),
 			wantErr:        errTest,
 		},
 		"success": {
 			store:          testStore{},
 			transactor:     testTransactor{},
 			accessJWS:      accessToken.JWS,
-			refreshTokenID: refreshToken.Fields.ID.String(),
+			refreshTokenID: refreshToken.ID.String(),
 			wantErr:        nil,
 		},
 	}
@@ -619,22 +598,16 @@ func TestService_DeleteUser(t *testing.T) {
 	tokenManager := testJWTManager(t)
 	user := domain.NewUser("token@test")
 
-	accessToken, err := tokenManager.Sign(
-		jwt.NewTokenFields(user.ID, user.Email, jwt.KindAccess, time.Hour),
-	)
-	if err != nil {
+	accessToken := domain.NewAccessToken(user.ID, user.Email, time.Hour)
+	if err := tokenManager.SignAccess(accessToken); err != nil {
 		t.Fatalf("failed to sign token: %v", err)
 	}
-	expiredAccessToken, err := tokenManager.Sign(
-		jwt.NewTokenFields(user.ID, user.Email, jwt.KindAccess, -time.Hour),
-	)
-	if err != nil {
+	expiredAccessToken := domain.NewAccessToken(user.ID, user.Email, -time.Hour)
+	if err := tokenManager.SignAccess(expiredAccessToken); err != nil {
 		t.Fatalf("failed to sign token: %v", err)
 	}
-	invalidKindToken, err := tokenManager.Sign(
-		jwt.NewTokenFields(user.ID, user.Email, jwt.KindRefresh, time.Hour),
-	)
-	if err != nil {
+	invalidKindToken := domain.NewRefreshToken(user.ID, user.Email, time.Hour)
+	if err := tokenManager.SignRefresh(invalidKindToken); err != nil {
 		t.Fatalf("failed to sign token: %v", err)
 	}
 
