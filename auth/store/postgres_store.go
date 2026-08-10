@@ -110,15 +110,17 @@ func (p *Postgres) CreateRefreshToken(ctx context.Context, token *domain.Refresh
 	return err
 }
 
-func (p *Postgres) GetRefreshToken(ctx context.Context, refreshTokenID uuid.UUID) (*domain.RefreshToken, error) {
+func (p *Postgres) GetRefreshToken(ctx context.Context, userID, refreshTokenID uuid.UUID) (
+	*domain.RefreshToken, error,
+) {
 	const query = `
-		SELECT user_id, email, created_at, expires_at
+		SELECT email, created_at, expires_at
 		FROM refresh_tokens
-		WHERE id = $1
+		WHERE user_id = $1 AND id = $2
 	`
-	row := refreshTokenRow{id: refreshTokenID}
-	if err := p.executor.QueryRowContext(ctx, query, refreshTokenID).Scan(
-		&row.userID, &row.email, &row.createdAt, &row.expiresAt,
+	row := refreshTokenRow{id: refreshTokenID, userID: userID}
+	if err := p.executor.QueryRowContext(ctx, query, userID, refreshTokenID).Scan(
+		&row.email, &row.createdAt, &row.expiresAt,
 	); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, sqlx.ErrNotFound

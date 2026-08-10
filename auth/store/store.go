@@ -21,7 +21,7 @@ type Store interface {
 	DeleteUser(ctx context.Context, userID uuid.UUID) error
 
 	CreateRefreshToken(ctx context.Context, token *domain.RefreshToken) error
-	GetRefreshToken(ctx context.Context, refreshTokenID uuid.UUID) (*domain.RefreshToken, error)
+	GetRefreshToken(ctx context.Context, userID, refreshTokenID uuid.UUID) (*domain.RefreshToken, error)
 	ListRefreshTokens(ctx context.Context, userID uuid.UUID) ([]*domain.RefreshToken, error)
 	DeleteRefreshToken(ctx context.Context, userID, refreshTokenID uuid.UUID) error
 }

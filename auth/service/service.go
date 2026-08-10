@@ -188,7 +188,7 @@ func (s *Service) RefreshAccessToken(ctx context.Context, refreshJWS string) (*d
 	var exists bool
 	err = s.transactor.Single(ctx, func(ctx context.Context, executor sqlx.Executor) error {
 		store := s.storeProvider.New(executor)
-		if _, err := store.GetRefreshToken(ctx, refreshToken.ID); err != nil {
+		if _, err := store.GetRefreshToken(ctx, refreshToken.UserID, refreshToken.ID); err != nil {
 			if errors.Is(err, sqlx.ErrNotFound) {
 				l.WarnContext(ctx, "is refresh token in store", slogx.Error(err))
 				exists = false

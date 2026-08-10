@@ -56,7 +56,9 @@ func (s testStore) CreateRefreshToken(ctx context.Context, token *domain.Refresh
 	return s.createRefreshTokenErr
 }
 
-func (s testStore) GetRefreshToken(ctx context.Context, refreshTokenID uuid.UUID) (*domain.RefreshToken, error) {
+func (s testStore) GetRefreshToken(ctx context.Context, userID, refreshTokenID uuid.UUID) (
+	*domain.RefreshToken, error,
+) {
 	return s.getRefreshToken, s.getRefreshTokenErr
 }
 
