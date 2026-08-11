@@ -35,7 +35,7 @@ func NewPostgres(executor sqlx.Executor) *Postgres {
 func (p *Postgres) CreateOTP(ctx context.Context, otp *domain.OTP) error {
 	const query = `
 		INSERT INTO otps(id, email, code, attempts, created_at, expires_at)
-		VALUES $1, $2, $3, $4, $5, $6
+		VALUES ($1, $2, $3, $4, $5, $6)
 	`
 	_, err := p.executor.ExecContext(ctx, query,
 		otp.ID, otp.Email, otp.Code, otp.Attempts, otp.CreatedAt, otp.ExpiresAt,
@@ -117,7 +117,7 @@ func (p *Postgres) DeleteUser(ctx context.Context, userID uuid.UUID) error {
 func (p *Postgres) CreateRefreshToken(ctx context.Context, token *domain.RefreshToken) error {
 	const query = `
 		INSERT INTO refresh_tokens(id, user_id, email, created_at, expires_at)
-		VALUES $1, $2, $3, $4, $5
+		VALUES ($1, $2, $3, $4, $5)
 	`
 	_, err := p.executor.ExecContext(ctx, query,
 		token.ID, token.UserID, token.Email, token.CreatedAt, token.ExpiresAt,
