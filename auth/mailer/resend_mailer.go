@@ -11,10 +11,8 @@ import (
 )
 
 type Resend struct {
-	client                *resend.Client
-	fromAddress           string
-	sendOTPRequestSubject string
-	sendOTPRequestContent string
+	client *resend.Client
+	params Params
 }
 
 var _ Mailer = &Resend{}
@@ -25,10 +23,8 @@ func NewResend(apiKey string, timeout time.Duration, params Params) *Resend {
 		apiKey,
 	)
 	return &Resend{
-		client:                client,
-		fromAddress:           params.FromAddress,
-		sendOTPRequestSubject: params.SendOTPRequestSubject,
-		sendOTPRequestContent: params.SendOTPRequestContent,
+		client: client,
+		params: params,
 	}
 }
 
@@ -37,10 +33,10 @@ func (r *Resend) SendOTPRequest(ctx context.Context, otp *domain.OTP) error {
 		return nil
 	}
 	params := &resend.SendEmailRequest{
-		From:    r.fromAddress,
+		From:    r.params.FromAddress,
 		To:      []string{string(otp.Email)},
-		Subject: r.sendOTPRequestSubject,
-		Text:    fmt.Sprintf(r.sendOTPRequestContent, string(otp.Code)),
+		Subject: r.params.SendOTPRequestSubject,
+		Text:    fmt.Sprintf(r.params.SendOTPRequestContent, string(otp.Code)),
 	}
 	_, err := r.client.Emails.SendWithContext(ctx, params)
 	return err
