@@ -65,7 +65,7 @@ func main() {
 		os.Exit(3)
 	}
 
-	service := service.New(&service.Params{
+	authService := service.New(&service.Params{
 		StoreProvider:        &postgresStoreProvider,
 		Mailer:               mailerImpl,
 		OTPDuration:          config.otpDuration,
@@ -78,17 +78,17 @@ func main() {
 	})
 
 	mux := http.NewServeMux()
-	handler := handler.New(service)
-	handler.RegisterRequestOTP(mux)
-	handler.RegisterConfirmOTP(mux)
-	handler.RegisterRefreshAccessToken(mux)
-	handler.RegisterListRefreshTokens(mux)
-	handler.RegisterDeleteRefreshToken(mux)
-	handler.RegisterDeleteUser(mux)
+	authHandler := handler.New(authService)
+	authHandler.RegisterRequestOTP(mux)
+	authHandler.RegisterConfirmOTP(mux)
+	authHandler.RegisterRefreshAccessToken(mux)
+	authHandler.RegisterListRefreshTokens(mux)
+	authHandler.RegisterDeleteRefreshToken(mux)
+	authHandler.RegisterDeleteUser(mux)
 
 	server := &http.Server{
 		Addr:         config.httpAddress,
-		Handler:      mux,
+		Handler:      handler.WithRequestID(mux),
 		ReadTimeout:  config.httpReadTimeout,
 		WriteTimeout: config.httpWriteTimeout,
 		ErrorLog:     slog.NewLogLogger(logger.Handler(), config.logLevel),

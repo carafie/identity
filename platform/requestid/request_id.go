@@ -16,3 +16,7 @@ func FromContext(ctx context.Context) uuid.UUID {
 	}
 	return uuid.UUID{}
 }
+
+func ToContext(ctx context.Context, requestID uuid.UUID) context.Context {
+	return context.WithValue(ctx, key, requestID)
+}
