@@ -18,6 +18,10 @@ type Handler struct {
 	service *service.Service
 }
 
+func New(service *service.Service) *Handler {
+	return &Handler{service: service}
+}
+
 type requestOTPParams struct {
 	Email string `json:"email"`
 }
