@@ -166,7 +166,7 @@ func (s *Service) ConfirmOTP(ctx context.Context, otpID, code string) (
 			return sqlx.Rollback, err
 		}
 		refresh := domain.NewRefreshToken(user.ID, user.Email, s.tokenRefreshDuration)
-		if err := s.tokenManager.SignAccess(access); err != nil {
+		if err := s.tokenManager.SignRefresh(refresh); err != nil {
 			l.ErrorContext(ctx, "sign refresh token", slogx.Error(err))
 			return sqlx.Rollback, err
 		}
