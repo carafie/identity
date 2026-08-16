@@ -5,8 +5,8 @@ import (
 	"database/sql"
 	"log/slog"
 
-	"github.com/carafie/identity/platform/requestid"
-	"github.com/carafie/identity/platform/slogx"
+	"github.com/carafie/identity/internal/requestid"
+	"github.com/carafie/identity/internal/slogx"
 )
 
 type PostgresTransactor struct {

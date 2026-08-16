@@ -3,7 +3,7 @@ package slogx
 import (
 	"log/slog"
 
-	"github.com/carafie/identity/platform/uuid"
+	"github.com/carafie/identity/internal/uuid"
 )
 
 const (

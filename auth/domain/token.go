@@ -6,9 +6,9 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/carafie/identity/platform/clock"
-	"github.com/carafie/identity/platform/mail"
-	"github.com/carafie/identity/platform/uuid"
+	"github.com/carafie/identity/internal/clock"
+	"github.com/carafie/identity/internal/mail"
+	"github.com/carafie/identity/internal/uuid"
 	"github.com/golang-jwt/jwt/v5"
 )
 

@@ -3,7 +3,7 @@ package handler
 import (
 	"net/http"
 
-	"github.com/carafie/identity/platform/requestid"
+	"github.com/carafie/identity/internal/requestid"
 	"github.com/google/uuid"
 )
 

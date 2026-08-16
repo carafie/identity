@@ -8,10 +8,10 @@ import (
 
 	"github.com/carafie/identity/auth/domain"
 	"github.com/carafie/identity/auth/service"
-	"github.com/carafie/identity/platform/httpx"
-	"github.com/carafie/identity/platform/mail"
-	"github.com/carafie/identity/platform/requestid"
-	"github.com/carafie/identity/platform/uuid"
+	"github.com/carafie/identity/internal/httpx"
+	"github.com/carafie/identity/internal/mail"
+	"github.com/carafie/identity/internal/requestid"
+	"github.com/carafie/identity/internal/uuid"
 )
 
 type Handler struct {

@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 
-	"github.com/carafie/identity/platform/uuid"
+	"github.com/carafie/identity/internal/uuid"
 )
 
 type Response struct {

@@ -7,8 +7,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/carafie/identity/platform/mail"
-	"github.com/carafie/identity/platform/uuid"
+	"github.com/carafie/identity/internal/mail"
+	"github.com/carafie/identity/internal/uuid"
 )
 
 func TestManager_SignAndParse(t *testing.T) {

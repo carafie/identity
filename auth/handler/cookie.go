@@ -4,7 +4,7 @@ import (
 	"net/http"
 
 	"github.com/carafie/identity/auth/domain"
-	"github.com/carafie/identity/platform/clock"
+	"github.com/carafie/identity/internal/clock"
 )
 
 func SetRefreshCookie(w http.ResponseWriter, refreshToken *domain.RefreshToken) {

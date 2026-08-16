@@ -20,8 +20,8 @@ import (
 	"github.com/carafie/identity/auth/mailer"
 	"github.com/carafie/identity/auth/service"
 	"github.com/carafie/identity/auth/store"
-	"github.com/carafie/identity/platform/slogx"
-	"github.com/carafie/identity/platform/sqlx"
+	"github.com/carafie/identity/internal/slogx"
+	"github.com/carafie/identity/internal/sqlx"
 	_ "github.com/jackc/pgx/v5/stdlib"
 )
 

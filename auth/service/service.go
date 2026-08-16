@@ -9,11 +9,11 @@ import (
 	"github.com/carafie/identity/auth/domain"
 	"github.com/carafie/identity/auth/mailer"
 	"github.com/carafie/identity/auth/store"
-	"github.com/carafie/identity/platform/mail"
-	"github.com/carafie/identity/platform/requestid"
-	"github.com/carafie/identity/platform/slogx"
-	"github.com/carafie/identity/platform/sqlx"
-	"github.com/carafie/identity/platform/uuid"
+	"github.com/carafie/identity/internal/mail"
+	"github.com/carafie/identity/internal/requestid"
+	"github.com/carafie/identity/internal/slogx"
+	"github.com/carafie/identity/internal/sqlx"
+	"github.com/carafie/identity/internal/uuid"
 )
 
 type Service struct {

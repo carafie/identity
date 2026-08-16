@@ -3,7 +3,7 @@ package requestid
 import (
 	"context"
 
-	"github.com/carafie/identity/platform/uuid"
+	"github.com/carafie/identity/internal/uuid"
 )
 
 type ctxKey int

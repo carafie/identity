@@ -7,9 +7,9 @@ import (
 	"math/big"
 	"time"
 
-	"github.com/carafie/identity/platform/clock"
-	"github.com/carafie/identity/platform/mail"
-	"github.com/carafie/identity/platform/uuid"
+	"github.com/carafie/identity/internal/clock"
+	"github.com/carafie/identity/internal/mail"
+	"github.com/carafie/identity/internal/uuid"
 )
 
 var (
