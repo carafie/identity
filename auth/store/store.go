@@ -4,12 +4,12 @@ import (
 	"context"
 
 	"github.com/carafie/identity/auth/domain"
-	"github.com/carafie/identity/internal/sqlx"
+	"github.com/carafie/identity/internal/database"
 	"github.com/carafie/identity/internal/uuid"
 )
 
-type Provider interface {
-	New(executor sqlx.Executor) Store
+type Factory interface {
+	New(executor database.Executor) Store
 }
 
 type Store interface {

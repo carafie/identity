@@ -7,32 +7,33 @@ import (
 	"time"
 
 	"github.com/carafie/identity/auth/domain"
+	"github.com/carafie/identity/internal/database"
 	"github.com/carafie/identity/internal/mail"
-	"github.com/carafie/identity/internal/sqlx"
 	"github.com/carafie/identity/internal/uuid"
 )
 
-type PostgresProvider struct{}
+type PgFactory struct{}
 
-var _ Provider = &PostgresProvider{}
+var _ Factory = PgFactory{}
 
-func (p *PostgresProvider) New(executor sqlx.Executor) Store {
-	return NewPostgres(executor)
+func NewPgFactory() PgFactory {
+	return PgFactory{}
 }
 
-type Postgres struct {
-	executor sqlx.Executor
-}
-
-var _ Store = &Postgres{}
-
-func NewPostgres(executor sqlx.Executor) *Postgres {
-	return &Postgres{
-		executor: executor,
+func (f PgFactory) New(executor database.Executor) Store {
+	if executor == nil {
+		panic("store.PgFactory.New: database.Executor cannot be nil")
 	}
+	return &pg{executor: executor}
 }
 
-func (p *Postgres) CreateOTP(ctx context.Context, otp *domain.OTP) error {
+type pg struct {
+	executor database.Executor
+}
+
+var _ Store = &pg{}
+
+func (p *pg) CreateOTP(ctx context.Context, otp *domain.OTP) error {
 	const query = `
 		INSERT INTO otps(id, email, code, attempts, created_at, expires_at)
 		VALUES ($1, $2, $3, $4, $5, $6)
@@ -43,7 +44,7 @@ func (p *Postgres) CreateOTP(ctx context.Context, otp *domain.OTP) error {
 	return err
 }
 
-func (p *Postgres) ConsumeOTP(ctx context.Context, otpID uuid.UUID) (*domain.OTP, error) {
+func (p *pg) ConsumeOTP(ctx context.Context, otpID uuid.UUID) (*domain.OTP, error) {
 	const query = `
 		UPDATE otps
 	    SET attempts = attempts + 1
@@ -55,14 +56,14 @@ func (p *Postgres) ConsumeOTP(ctx context.Context, otpID uuid.UUID) (*domain.OTP
 		&row.email, &row.code, &row.attempts, &row.createdAt, &row.expiresAt,
 	); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			return nil, sqlx.ErrNotFound
+			return nil, database.ErrNotFound
 		}
 		return nil, err
 	}
 	return row.Parse()
 }
 
-func (p *Postgres) DeleteOTP(ctx context.Context, otpID uuid.UUID) error {
+func (p *pg) DeleteOTP(ctx context.Context, otpID uuid.UUID) error {
 	const query = `
 		DELETE FROM otps
 		WHERE id = $1
@@ -72,12 +73,12 @@ func (p *Postgres) DeleteOTP(ctx context.Context, otpID uuid.UUID) error {
 		return err
 	}
 	if affected, _ := result.RowsAffected(); affected != 1 {
-		return sqlx.ErrNotFound
+		return database.ErrNotFound
 	}
 	return nil
 }
 
-func (p *Postgres) GetUserByEmailOrCreate(ctx context.Context, user *domain.User) (*domain.User, error) {
+func (p *pg) GetUserByEmailOrCreate(ctx context.Context, user *domain.User) (*domain.User, error) {
 	const query = `
 		WITH inserted AS (
 		    INSERT INTO users(id, email, email_normalized)
@@ -99,7 +100,7 @@ func (p *Postgres) GetUserByEmailOrCreate(ctx context.Context, user *domain.User
 	return row.Parse()
 }
 
-func (p *Postgres) DeleteUser(ctx context.Context, userID uuid.UUID) error {
+func (p *pg) DeleteUser(ctx context.Context, userID uuid.UUID) error {
 	const query = `
 		DELETE FROM users
 		WHERE id = $1
@@ -109,12 +110,12 @@ func (p *Postgres) DeleteUser(ctx context.Context, userID uuid.UUID) error {
 		return err
 	}
 	if affected, _ := result.RowsAffected(); affected != 1 {
-		return sqlx.ErrNotFound
+		return database.ErrNotFound
 	}
 	return nil
 }
 
-func (p *Postgres) CreateRefreshToken(ctx context.Context, token *domain.RefreshToken) error {
+func (p *pg) CreateRefreshToken(ctx context.Context, token *domain.RefreshToken) error {
 	const query = `
 		INSERT INTO refresh_tokens(id, user_id, email, created_at, expires_at)
 		VALUES ($1, $2, $3, $4, $5)
@@ -125,7 +126,7 @@ func (p *Postgres) CreateRefreshToken(ctx context.Context, token *domain.Refresh
 	return err
 }
 
-func (p *Postgres) GetRefreshToken(ctx context.Context, userID, refreshTokenID uuid.UUID) (
+func (p *pg) GetRefreshToken(ctx context.Context, userID, refreshTokenID uuid.UUID) (
 	*domain.RefreshToken, error,
 ) {
 	const query = `
@@ -138,14 +139,14 @@ func (p *Postgres) GetRefreshToken(ctx context.Context, userID, refreshTokenID u
 		&row.email, &row.createdAt, &row.expiresAt,
 	); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			return nil, sqlx.ErrNotFound
+			return nil, database.ErrNotFound
 		}
 		return nil, err
 	}
 	return row.Parse()
 }
 
-func (p *Postgres) ListRefreshTokens(ctx context.Context, userID uuid.UUID) ([]*domain.RefreshToken, error) {
+func (p *pg) ListRefreshTokens(ctx context.Context, userID uuid.UUID) ([]*domain.RefreshToken, error) {
 	const query = `
 		SELECT id, email, created_at, expires_at
 		FROM refresh_tokens
@@ -177,7 +178,7 @@ func (p *Postgres) ListRefreshTokens(ctx context.Context, userID uuid.UUID) ([]*
 	return tokens, nil
 }
 
-func (p *Postgres) DeleteRefreshToken(ctx context.Context, userID, refreshTokenID uuid.UUID) error {
+func (p *pg) DeleteRefreshToken(ctx context.Context, userID, refreshTokenID uuid.UUID) error {
 	const query = `
 		DELETE FROM refresh_tokens
 		WHERE user_id = $1 AND id = $2
@@ -187,7 +188,7 @@ func (p *Postgres) DeleteRefreshToken(ctx context.Context, userID, refreshTokenI
 		return err
 	}
 	if affected, _ := result.RowsAffected(); affected != 1 {
-		return sqlx.ErrNotFound
+		return database.ErrNotFound
 	}
 	return nil
 }

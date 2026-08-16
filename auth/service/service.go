@@ -3,22 +3,23 @@ package service
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log/slog"
 	"time"
 
 	"github.com/carafie/identity/auth/domain"
 	"github.com/carafie/identity/auth/mailer"
 	"github.com/carafie/identity/auth/store"
+	"github.com/carafie/identity/internal/database"
 	"github.com/carafie/identity/internal/mail"
 	"github.com/carafie/identity/internal/requestid"
 	"github.com/carafie/identity/internal/slogx"
-	"github.com/carafie/identity/internal/sqlx"
 	"github.com/carafie/identity/internal/uuid"
 )
 
 type Service struct {
-	storeProvider store.Provider
-	mailer        mailer.Mailer
+	storeFactory store.Factory
+	mailer       mailer.Mailer
 
 	otpDuration    time.Duration
 	otpMaxAttempts int
@@ -27,13 +28,13 @@ type Service struct {
 	tokenAccessDuration  time.Duration
 	tokenRefreshDuration time.Duration
 
-	transactor sqlx.Transactor
+	transactor database.Transactor
 	logger     *slog.Logger
 }
 
 type Params struct {
-	StoreProvider store.Provider
-	Mailer        mailer.Mailer
+	StoreFactory store.Factory
+	Mailer       mailer.Mailer
 
 	OTPDuration    time.Duration
 	OTPMaxAttempts int
@@ -42,29 +43,29 @@ type Params struct {
 	TokenAccessDuration  time.Duration
 	TokenRefreshDuration time.Duration
 
-	Transactor sqlx.Transactor
+	Transactor database.Transactor
 	Logger     *slog.Logger
 }
 
 func New(params *Params) *Service {
-	if params.StoreProvider == nil {
-		panic("store provider cannot be nil")
+	if params.StoreFactory == nil {
+		panic("service.New: store.Factory cannot be nil")
 	}
 	if params.Mailer == nil {
-		panic("mailer cannot be nil")
+		panic("service.New: mailer.Mailer cannot be nil")
 	}
 	if params.TokenManager == nil {
-		panic("token manager cannot be nil")
+		panic("service.New: *domain.TokenManager cannot be nil")
 	}
 	if params.Transactor == nil {
-		panic("transactor cannot be nil")
+		panic("service.New: database.Transactor cannot be nil")
 	}
 	if params.Logger == nil {
 		params.Logger = slog.New(slog.DiscardHandler)
 	}
 	return &Service{
-		storeProvider: params.StoreProvider,
-		mailer:        params.Mailer,
+		storeFactory: params.StoreFactory,
+		mailer:       params.Mailer,
 
 		otpDuration:    params.OTPDuration,
 		otpMaxAttempts: params.OTPMaxAttempts,
@@ -90,15 +91,15 @@ func (s *Service) RequestOTP(ctx context.Context, email string) (*domain.OTP, er
 
 	l = s.logger.With(slogx.OTPID(otp.ID))
 
-	err = s.transactor.Single(ctx, func(ctx context.Context, executor sqlx.Executor) error {
-		store := s.storeProvider.New(executor)
+	err = s.transactor.Single(ctx, func(ctx context.Context, executor database.Executor) error {
+		store := s.storeFactory.New(executor)
 		if err := store.CreateOTP(ctx, otp); err != nil {
-			l.ErrorContext(ctx, "create otp in store", slogx.Error(err))
-			return err
+			return fmt.Errorf("failed to create otp: %w", err)
 		}
 		return nil
 	})
 	if err != nil {
+		l.ErrorContext(ctx, "database transaction", slogx.Error(err))
 		return nil, err
 	}
 
@@ -129,57 +130,54 @@ func (s *Service) ConfirmOTP(ctx context.Context, otpID, code string) (
 	var (
 		accessToken  *domain.AccessToken
 		refreshToken *domain.RefreshToken
+		safeErr      error
 	)
-	err = s.transactor.Atomic(ctx, func(ctx context.Context, executor sqlx.Executor) (sqlx.TCL, error) {
-		store := s.storeProvider.New(executor)
+	err = s.transactor.Atomic(ctx, func(ctx context.Context, executor database.Executor) error {
+		store := s.storeFactory.New(executor)
 
 		otp, err := store.ConsumeOTP(ctx, parsedOTPID)
 		if err != nil {
-			if errors.Is(err, sqlx.ErrNotFound) {
-				l.WarnContext(ctx, "consume otp in store", slogx.Error(err))
-				return sqlx.Rollback, domain.ErrCodeExpired
+			if errors.Is(err, database.ErrNotFound) {
+				err = domain.ErrCodeExpired
 			}
-			l.ErrorContext(ctx, "consume otp in store", slogx.Error(err))
-			return sqlx.Rollback, err
+			return fmt.Errorf("failed to consume otp: %w", err)
 		}
 		if err := otp.Validate(parsedCode, s.otpMaxAttempts); err != nil {
-			if errors.Is(err, domain.ErrCodeMismatched) {
-				return sqlx.Commit, err
-			}
-			return sqlx.Rollback, err
+			// Return no error so the transaction commits and increases the attempts counter.
+			safeErr = err
+			return nil
 		}
 
 		if err := store.DeleteOTP(ctx, otp.ID); err != nil {
-			l.ErrorContext(ctx, "delete otp from store", slogx.Error(err))
-			return sqlx.Rollback, err
+			return fmt.Errorf("failed to delete otp: %w", err)
 		}
 
 		user, err := store.GetUserByEmailOrCreate(ctx, domain.NewUser(otp.Email))
 		if err != nil {
-			l.ErrorContext(ctx, "get user by email or create in store", slogx.Error(err))
-			return sqlx.Rollback, err
+			return fmt.Errorf("failed to get user by email or create: %w", err)
 		}
 
 		access := domain.NewAccessToken(user.ID, user.Email, s.tokenAccessDuration)
 		if err := s.tokenManager.SignAccess(access); err != nil {
-			l.ErrorContext(ctx, "sign access token", slogx.Error(err))
-			return sqlx.Rollback, err
+			return fmt.Errorf("failed to sign access token: %w", err)
 		}
 		refresh := domain.NewRefreshToken(user.ID, user.Email, s.tokenRefreshDuration)
 		if err := s.tokenManager.SignRefresh(refresh); err != nil {
-			l.ErrorContext(ctx, "sign refresh token", slogx.Error(err))
-			return sqlx.Rollback, err
+			return fmt.Errorf("failed to sign refresh token: %w", err)
 		}
 		if err := store.CreateRefreshToken(ctx, refresh); err != nil {
-			l.ErrorContext(ctx, "create refresh token in store", slogx.Error(err))
-			return sqlx.Rollback, err
+			return fmt.Errorf("failed to create refresh token: %w", err)
 		}
 		accessToken = access
 		refreshToken = refresh
 
-		return sqlx.Commit, nil
+		return nil
 	})
-	return accessToken, refreshToken, err
+	if err != nil {
+		l.ErrorContext(ctx, "database transaction", slogx.Error(err))
+		return nil, nil, err
+	}
+	return accessToken, refreshToken, safeErr
 }
 
 func (s *Service) RefreshAccessToken(ctx context.Context, refreshJWS string) (*domain.AccessToken, error) {
@@ -191,26 +189,19 @@ func (s *Service) RefreshAccessToken(ctx context.Context, refreshJWS string) (*d
 		return nil, domain.ErrTokenInvalid
 	}
 
-	var exists bool
-	err = s.transactor.Single(ctx, func(ctx context.Context, executor sqlx.Executor) error {
-		store := s.storeProvider.New(executor)
+	err = s.transactor.Single(ctx, func(ctx context.Context, executor database.Executor) error {
+		store := s.storeFactory.New(executor)
 		if _, err := store.GetRefreshToken(ctx, refreshToken.UserID, refreshToken.ID); err != nil {
-			if errors.Is(err, sqlx.ErrNotFound) {
-				l.WarnContext(ctx, "is refresh token in store", slogx.Error(err))
-				exists = false
-				return nil
+			if errors.Is(err, database.ErrNotFound) {
+				err = domain.ErrTokenNotFound
 			}
-			l.ErrorContext(ctx, "is refresh token in store", slogx.Error(err))
-			return err
+			return fmt.Errorf("failed to get refresh token: %w", err)
 		}
-		exists = true
 		return nil
 	})
 	if err != nil {
+		l.ErrorContext(ctx, "database transaction", slogx.Error(err))
 		return nil, err
-	}
-	if !exists {
-		return nil, domain.ErrTokenNotFound
 	}
 
 	accessToken := domain.NewAccessToken(refreshToken.UserID, refreshToken.Email, s.tokenAccessDuration)
@@ -227,17 +218,22 @@ func (s *Service) ListRefreshTokens(ctx context.Context, accessJWS string) ([]*d
 	}
 
 	var refreshTokens []*domain.RefreshToken
-	err = s.transactor.Single(ctx, func(ctx context.Context, executor sqlx.Executor) error {
-		store := s.storeProvider.New(executor)
+
+	err = s.transactor.Single(ctx, func(ctx context.Context, executor database.Executor) error {
+		store := s.storeFactory.New(executor)
 		tokens, err := store.ListRefreshTokens(ctx, accessToken.UserID)
 		if err != nil {
-			l.ErrorContext(ctx, "list refresh tokens from store", slogx.Error(err))
-			return err
+			return fmt.Errorf("failed to list refresh tokens: %w", err)
 		}
 		refreshTokens = tokens
 		return nil
 	})
-	return refreshTokens, err
+	if err != nil {
+		l.ErrorContext(ctx, "database transaction", slogx.Error(err))
+		return nil, err
+	}
+
+	return refreshTokens, nil
 }
 
 func (s *Service) DeleteRefreshToken(ctx context.Context, accessJWS, refreshTokenID string) error {
@@ -255,18 +251,22 @@ func (s *Service) DeleteRefreshToken(ctx context.Context, accessJWS, refreshToke
 		return domain.ErrTokenInvalid
 	}
 
-	return s.transactor.Single(ctx, func(ctx context.Context, executor sqlx.Executor) error {
-		store := s.storeProvider.New(executor)
+	err = s.transactor.Single(ctx, func(ctx context.Context, executor database.Executor) error {
+		store := s.storeFactory.New(executor)
 		if err := store.DeleteRefreshToken(ctx, accessToken.UserID, parsedRefreshTokenID); err != nil {
-			if errors.Is(err, sqlx.ErrNotFound) {
-				l.WarnContext(ctx, "delete refresh token from store", slogx.Error(err))
-				return domain.ErrTokenNotFound
+			if errors.Is(err, database.ErrNotFound) {
+				err = domain.ErrTokenNotFound
 			}
-			l.ErrorContext(ctx, "delete refresh token from store", slogx.Error(err))
-			return err
+			return fmt.Errorf("failed to delete refresh token: %w", err)
 		}
 		return nil
 	})
+	if err != nil {
+		l.ErrorContext(ctx, "database transaction", slogx.Error(err))
+		return err
+	}
+
+	return nil
 }
 
 func (s *Service) DeleteUser(ctx context.Context, accessJWS, userID string) error {
@@ -286,16 +286,20 @@ func (s *Service) DeleteUser(ctx context.Context, accessJWS, userID string) erro
 		return domain.ErrUserNotFound
 	}
 
-	return s.transactor.Single(ctx, func(ctx context.Context, executor sqlx.Executor) error {
-		store := s.storeProvider.New(executor)
+	err = s.transactor.Single(ctx, func(ctx context.Context, executor database.Executor) error {
+		store := s.storeFactory.New(executor)
 		if err := store.DeleteUser(ctx, parsedUserID); err != nil {
-			if errors.Is(err, sqlx.ErrNotFound) {
-				l.WarnContext(ctx, "delete user from store", slogx.Error(err))
-				return domain.ErrUserNotFound
+			if errors.Is(err, database.ErrNotFound) {
+				err = domain.ErrUserNotFound
 			}
-			l.ErrorContext(ctx, "delete user from store", slogx.Error(err))
-			return err
+			return fmt.Errorf("failed to delete user: %w", err)
 		}
 		return nil
 	})
+	if err != nil {
+		l.ErrorContext(ctx, "database transaction", slogx.Error(err))
+		return err
+	}
+
+	return nil
 }
