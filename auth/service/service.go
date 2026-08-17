@@ -4,16 +4,14 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"log/slog"
 	"time"
 
 	"github.com/carafie/identity/auth/domain"
 	"github.com/carafie/identity/auth/mailer"
 	"github.com/carafie/identity/auth/store"
 	"github.com/carafie/identity/internal/database"
+	"github.com/carafie/identity/internal/logging"
 	"github.com/carafie/identity/internal/mail"
-	"github.com/carafie/identity/internal/requestid"
-	"github.com/carafie/identity/internal/slogx"
 	"github.com/carafie/identity/internal/uuid"
 )
 
@@ -29,7 +27,6 @@ type Service struct {
 	tokenRefreshDuration time.Duration
 
 	transactor database.Transactor
-	logger     *slog.Logger
 }
 
 type Params struct {
@@ -44,7 +41,6 @@ type Params struct {
 	TokenRefreshDuration time.Duration
 
 	Transactor database.Transactor
-	Logger     *slog.Logger
 }
 
 func New(params *Params) *Service {
@@ -60,9 +56,6 @@ func New(params *Params) *Service {
 	if params.Transactor == nil {
 		panic("service.New: database.Transactor cannot be nil")
 	}
-	if params.Logger == nil {
-		params.Logger = slog.New(slog.DiscardHandler)
-	}
 	return &Service{
 		storeFactory: params.StoreFactory,
 		mailer:       params.Mailer,
@@ -75,21 +68,19 @@ func New(params *Params) *Service {
 		tokenRefreshDuration: params.TokenRefreshDuration,
 
 		transactor: params.Transactor,
-		logger:     params.Logger,
 	}
 }
 
 func (s *Service) RequestOTP(ctx context.Context, email string) (*domain.OTP, error) {
-	l := s.logger.With(slogx.RequestID(requestid.FromContext(ctx)))
+	l := logging.FromContext(ctx)
 
 	parsedEmail, err := mail.Parse(email)
 	if err != nil {
-		l.WarnContext(ctx, "parse email", slogx.Error(err))
+		l.WarnContext(ctx, "parse otp email", logging.Error(err))
 		return nil, err
 	}
 	otp := domain.NewOTP(parsedEmail, s.otpDuration)
-
-	l = s.logger.With(slogx.OTPID(otp.ID))
+	l = l.With(domain.OTPID(otp.ID))
 
 	err = s.transactor.Single(ctx, func(ctx context.Context, executor database.Executor) error {
 		store := s.storeFactory.New(executor)
@@ -99,12 +90,12 @@ func (s *Service) RequestOTP(ctx context.Context, email string) (*domain.OTP, er
 		return nil
 	})
 	if err != nil {
-		l.ErrorContext(ctx, "database transaction", slogx.Error(err))
+		l.ErrorContext(ctx, "database transaction", logging.Error(err))
 		return nil, err
 	}
 
 	if err := s.mailer.SendOTPRequest(ctx, otp); err != nil {
-		l.ErrorContext(ctx, "send otp request email", slogx.Error(err))
+		l.ErrorContext(ctx, "send otp request email", logging.Error(err))
 		return nil, err
 	}
 
@@ -114,18 +105,19 @@ func (s *Service) RequestOTP(ctx context.Context, email string) (*domain.OTP, er
 func (s *Service) ConfirmOTP(ctx context.Context, otpID, code string) (
 	*domain.AccessToken, *domain.RefreshToken, error,
 ) {
-	l := s.logger.With(slogx.RequestID(requestid.FromContext(ctx)))
+	l := logging.FromContext(ctx)
 
 	parsedOTPID, err := uuid.Parse(otpID)
 	if err != nil {
-		l.WarnContext(ctx, "parse otp id", slogx.Error(err))
+		l.WarnContext(ctx, "parse otp id", logging.Error(err))
 		return nil, nil, err
 	}
 	parsedCode, err := domain.ParseCode(code)
 	if err != nil {
-		l.WarnContext(ctx, "parse otp code", slogx.Error(err))
+		l.WarnContext(ctx, "parse otp code", logging.Error(err))
 		return nil, nil, err
 	}
+	l = l.With(domain.OTPID(parsedOTPID))
 
 	var (
 		accessToken  *domain.AccessToken
@@ -156,6 +148,7 @@ func (s *Service) ConfirmOTP(ctx context.Context, otpID, code string) (
 		if err != nil {
 			return fmt.Errorf("failed to get user by email or create: %w", err)
 		}
+		l = l.With(domain.UserID(user.ID))
 
 		access := domain.NewAccessToken(user.ID, user.Email, s.tokenAccessDuration)
 		if err := s.tokenManager.SignAccess(access); err != nil {
@@ -165,6 +158,7 @@ func (s *Service) ConfirmOTP(ctx context.Context, otpID, code string) (
 		if err := s.tokenManager.SignRefresh(refresh); err != nil {
 			return fmt.Errorf("failed to sign refresh token: %w", err)
 		}
+		l = l.With(domain.RefreshTokenID(refresh.ID))
 		if err := store.CreateRefreshToken(ctx, refresh); err != nil {
 			return fmt.Errorf("failed to create refresh token: %w", err)
 		}
@@ -174,20 +168,21 @@ func (s *Service) ConfirmOTP(ctx context.Context, otpID, code string) (
 		return nil
 	})
 	if err != nil {
-		l.ErrorContext(ctx, "database transaction", slogx.Error(err))
+		l.ErrorContext(ctx, "database transaction", logging.Error(err))
 		return nil, nil, err
 	}
 	return accessToken, refreshToken, safeErr
 }
 
 func (s *Service) RefreshAccessToken(ctx context.Context, refreshJWS string) (*domain.AccessToken, error) {
-	l := s.logger.With(slogx.RequestID(requestid.FromContext(ctx)))
+	l := logging.FromContext(ctx)
 
 	refreshToken, err := s.tokenManager.ParseRefresh(refreshJWS)
 	if err != nil {
-		l.WarnContext(ctx, "parse refresh token", slogx.Error(err))
+		l.WarnContext(ctx, "parse refresh token", logging.Error(err))
 		return nil, domain.ErrTokenInvalid
 	}
+	l = l.With(domain.UserID(refreshToken.UserID), domain.RefreshTokenID(refreshToken.ID))
 
 	err = s.transactor.Single(ctx, func(ctx context.Context, executor database.Executor) error {
 		store := s.storeFactory.New(executor)
@@ -200,7 +195,7 @@ func (s *Service) RefreshAccessToken(ctx context.Context, refreshJWS string) (*d
 		return nil
 	})
 	if err != nil {
-		l.ErrorContext(ctx, "database transaction", slogx.Error(err))
+		l.ErrorContext(ctx, "database transaction", logging.Error(err))
 		return nil, err
 	}
 
@@ -209,13 +204,14 @@ func (s *Service) RefreshAccessToken(ctx context.Context, refreshJWS string) (*d
 }
 
 func (s *Service) ListRefreshTokens(ctx context.Context, accessJWS string) ([]*domain.RefreshToken, error) {
-	l := s.logger.With(slogx.RequestID(requestid.FromContext(ctx)))
+	l := logging.FromContext(ctx)
 
 	accessToken, err := s.tokenManager.ParseAccess(accessJWS)
 	if err != nil {
-		l.WarnContext(ctx, "parse access token", slogx.Error(err))
+		l.WarnContext(ctx, "parse access token", logging.Error(err))
 		return nil, domain.ErrTokenInvalid
 	}
+	l = l.With(domain.UserID(accessToken.UserID))
 
 	var refreshTokens []*domain.RefreshToken
 
@@ -229,7 +225,7 @@ func (s *Service) ListRefreshTokens(ctx context.Context, accessJWS string) ([]*d
 		return nil
 	})
 	if err != nil {
-		l.ErrorContext(ctx, "database transaction", slogx.Error(err))
+		l.ErrorContext(ctx, "database transaction", logging.Error(err))
 		return nil, err
 	}
 
@@ -237,19 +233,21 @@ func (s *Service) ListRefreshTokens(ctx context.Context, accessJWS string) ([]*d
 }
 
 func (s *Service) DeleteRefreshToken(ctx context.Context, accessJWS, refreshTokenID string) error {
-	l := s.logger.With(slogx.RequestID(requestid.FromContext(ctx)))
+	l := logging.FromContext(ctx)
 
 	accessToken, err := s.tokenManager.ParseAccess(accessJWS)
 	if err != nil {
-		l.WarnContext(ctx, "parse access token", slogx.Error(err))
+		l.WarnContext(ctx, "parse access token", logging.Error(err))
 		return domain.ErrTokenInvalid
 	}
+	l = l.With(domain.UserID(accessToken.UserID))
 
 	parsedRefreshTokenID, err := uuid.Parse(refreshTokenID)
 	if err != nil {
 		l.WarnContext(ctx, "invalid refresh token id")
 		return domain.ErrTokenInvalid
 	}
+	l = l.With(domain.RefreshTokenID(parsedRefreshTokenID))
 
 	err = s.transactor.Single(ctx, func(ctx context.Context, executor database.Executor) error {
 		store := s.storeFactory.New(executor)
@@ -262,7 +260,7 @@ func (s *Service) DeleteRefreshToken(ctx context.Context, accessJWS, refreshToke
 		return nil
 	})
 	if err != nil {
-		l.ErrorContext(ctx, "database transaction", slogx.Error(err))
+		l.ErrorContext(ctx, "database transaction", logging.Error(err))
 		return err
 	}
 
@@ -270,13 +268,14 @@ func (s *Service) DeleteRefreshToken(ctx context.Context, accessJWS, refreshToke
 }
 
 func (s *Service) DeleteUser(ctx context.Context, accessJWS, userID string) error {
-	l := s.logger.With(slogx.RequestID(requestid.FromContext(ctx)))
+	l := logging.FromContext(ctx)
 
 	accessToken, err := s.tokenManager.ParseAccess(accessJWS)
 	if err != nil {
-		l.WarnContext(ctx, "parse access token", slogx.Error(err))
+		l.WarnContext(ctx, "parse access token", logging.Error(err))
 		return domain.ErrTokenInvalid
 	}
+	l = l.With(domain.UserID(accessToken.UserID))
 
 	parsedUserID, err := uuid.Parse(userID)
 	if err != nil {
@@ -297,7 +296,7 @@ func (s *Service) DeleteUser(ctx context.Context, accessJWS, userID string) erro
 		return nil
 	})
 	if err != nil {
-		l.ErrorContext(ctx, "database transaction", slogx.Error(err))
+		l.ErrorContext(ctx, "database transaction", logging.Error(err))
 		return err
 	}
 

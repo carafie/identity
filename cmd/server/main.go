@@ -20,7 +20,7 @@ import (
 	authService "github.com/carafie/identity/auth/service"
 	authStore "github.com/carafie/identity/auth/store"
 	"github.com/carafie/identity/internal/database"
-	"github.com/carafie/identity/internal/slogx"
+	"github.com/carafie/identity/internal/logging"
 	_ "github.com/jackc/pgx/v5/stdlib"
 )
 
@@ -65,7 +65,7 @@ func main() {
 	case "resend":
 		mailer = authMailer.NewResend(config.mailerResendAPIKey, config.mailerTimeout, mailerParams)
 	case "log":
-		mailer = authMailer.NewLog(logger, mailerParams)
+		mailer = authMailer.NewLog(mailerParams)
 	default:
 		fmt.Printf("unexpected mailer: %q\n", config.mailer)
 		os.Exit(3)
@@ -80,7 +80,6 @@ func main() {
 		TokenAccessDuration:  config.jwtAccessDuration,
 		TokenRefreshDuration: config.jwtRefreshDuration,
 		Transactor:           transactor,
-		Logger:               logger,
 	})
 
 	mux := http.NewServeMux()
@@ -94,7 +93,7 @@ func main() {
 
 	server := &http.Server{
 		Addr:         config.httpAddress,
-		Handler:      authHandler.WithRequestID(mux),
+		Handler:      authHandler.WithRequestID(authHandler.WithLogger(logger, mux)),
 		ReadTimeout:  config.httpReadTimeout,
 		WriteTimeout: config.httpWriteTimeout,
 		ErrorLog:     slog.NewLogLogger(logger.Handler(), config.logLevel),
@@ -106,7 +105,7 @@ func main() {
 	go func() {
 		if err := server.ListenAndServe(); err != nil {
 			if !errors.Is(err, http.ErrServerClosed) {
-				logger.Error("http server listen and serve", slogx.Error(err))
+				logger.Error("http server listen and serve", logging.Error(err))
 				os.Exit(4)
 			}
 		}
@@ -118,7 +117,7 @@ func main() {
 	defer cancel()
 
 	if err := server.Shutdown(ctx); err != nil {
-		logger.Error("http server shutdown", slogx.Error(err))
+		logger.Error("http server shutdown", logging.Error(err))
 		os.Exit(5)
 	}
 	logger.Info("http server graceful shutdown")

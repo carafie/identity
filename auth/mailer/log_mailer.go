@@ -6,27 +6,22 @@ import (
 	"log/slog"
 
 	"github.com/carafie/identity/auth/domain"
+	"github.com/carafie/identity/internal/logging"
 )
 
 type Log struct {
-	logger *slog.Logger
 	params Params
 }
 
 var _ Mailer = &Log{}
 
-func NewLog(logger *slog.Logger, params Params) *Log {
-	if logger == nil {
-		logger = slog.New(slog.DiscardHandler)
-	}
-	return &Log{
-		logger: logger,
-		params: params,
-	}
+func NewLog(params Params) *Log {
+	return &Log{params: params}
 }
 
 func (l *Log) SendOTPRequest(ctx context.Context, otp *domain.OTP) error {
-	l.logger.InfoContext(ctx, "",
+	logger := logging.FromContext(ctx)
+	logger.InfoContext(ctx, "send otp request email",
 		slog.String("from", l.params.FromAddress),
 		slog.String("to", string(otp.Email)),
 		slog.String("subject", l.params.SendOTPRequestSubject),

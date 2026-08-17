@@ -9,8 +9,8 @@ import (
 	"github.com/carafie/identity/auth/domain"
 	"github.com/carafie/identity/auth/service"
 	"github.com/carafie/identity/internal/httpx"
+	"github.com/carafie/identity/internal/logging"
 	"github.com/carafie/identity/internal/mail"
-	"github.com/carafie/identity/internal/requestid"
 	"github.com/carafie/identity/internal/uuid"
 )
 
@@ -32,7 +32,7 @@ type requestOTPResponse struct {
 }
 
 func (h *Handler) RequestOTP(w http.ResponseWriter, r *http.Request) httpx.Response {
-	requestID := requestid.FromContext(r.Context())
+	requestID := logging.RequestIDFromContext(r.Context())
 
 	var params requestOTPParams
 	if err := json.NewDecoder(r.Body).Decode(&params); err != nil {
@@ -67,7 +67,7 @@ type confirmOTPResponse struct {
 }
 
 func (h *Handler) ConfirmOTP(w http.ResponseWriter, r *http.Request) httpx.Response {
-	requestID := requestid.FromContext(r.Context())
+	requestID := logging.RequestIDFromContext(r.Context())
 
 	otpID := r.PathValue("id")
 
@@ -107,7 +107,7 @@ type refreshAccessTokenResponse struct {
 }
 
 func (h *Handler) RefreshAccessToken(w http.ResponseWriter, r *http.Request) httpx.Response {
-	requestID := requestid.FromContext(r.Context())
+	requestID := logging.RequestIDFromContext(r.Context())
 
 	refreshCookie, err := GetRefreshCookie(r)
 	if err != nil {
@@ -143,7 +143,7 @@ type listRefreshTokensResponse struct {
 }
 
 func (h *Handler) ListRefreshTokens(w http.ResponseWriter, r *http.Request) httpx.Response {
-	requestID := requestid.FromContext(r.Context())
+	requestID := logging.RequestIDFromContext(r.Context())
 
 	accessJWS := AccessJWSFromRequest(r)
 	if accessJWS == "" {
@@ -179,7 +179,7 @@ func (h *Handler) RegisterListRefreshTokens(mux *http.ServeMux) {
 }
 
 func (h *Handler) DeleteRefreshToken(w http.ResponseWriter, r *http.Request) httpx.Response {
-	requestID := requestid.FromContext(r.Context())
+	requestID := logging.RequestIDFromContext(r.Context())
 
 	refreshTokenID := r.PathValue("id")
 
@@ -210,7 +210,7 @@ func (h *Handler) RegisterDeleteRefreshToken(mux *http.ServeMux) {
 }
 
 func (h *Handler) DeleteUser(w http.ResponseWriter, r *http.Request) httpx.Response {
-	requestID := requestid.FromContext(r.Context())
+	requestID := logging.RequestIDFromContext(r.Context())
 
 	userID := r.PathValue("id")
 

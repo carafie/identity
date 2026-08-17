@@ -13,6 +13,7 @@ import (
 	"github.com/carafie/identity/auth/mailer"
 	"github.com/carafie/identity/auth/store"
 	"github.com/carafie/identity/internal/database"
+	"github.com/carafie/identity/internal/logging"
 	"github.com/carafie/identity/internal/mail"
 	"github.com/carafie/identity/internal/uuid"
 )
@@ -183,9 +184,9 @@ func TestService_RequestOTP(t *testing.T) {
 				TokenAccessDuration:  1 * time.Hour,
 				TokenRefreshDuration: 90 * 24 * time.Hour,
 				Transactor:           test.transactor,
-				Logger:               slog.New(slog.NewJSONHandler(t.Output(), nil)),
 			})
-			_, gotErr := service.RequestOTP(t.Context(), test.email)
+			ctx := logging.NewContext(t.Context(), slog.New(slog.NewJSONHandler(t.Output(), nil)))
+			_, gotErr := service.RequestOTP(ctx, test.email)
 			if !errors.Is(gotErr, test.wantErr) {
 				t.Errorf(
 					"Service.Request(..., %q), gotErr=%q, wantErr=%q",
@@ -323,9 +324,9 @@ func TestService_ConfirmOTP(t *testing.T) {
 				TokenAccessDuration:  1 * time.Hour,
 				TokenRefreshDuration: 90 * 24 * time.Hour,
 				Transactor:           test.transactor,
-				Logger:               slog.New(slog.NewJSONHandler(t.Output(), nil)),
 			})
-			_, _, gotErr := service.ConfirmOTP(t.Context(), test.otpID, test.code)
+			ctx := logging.NewContext(t.Context(), slog.New(slog.NewJSONHandler(t.Output(), nil)))
+			_, _, gotErr := service.ConfirmOTP(ctx, test.otpID, test.code)
 			if !errors.Is(gotErr, test.wantErr) {
 				t.Errorf(
 					"Service.Confirm(..., ..., %q), gotErr=%q, wantErr=%q",
@@ -414,9 +415,9 @@ func TestService_RefreshAccessToken(t *testing.T) {
 				TokenAccessDuration:  1 * time.Hour,
 				TokenRefreshDuration: 90 * 24 * time.Hour,
 				Transactor:           test.transactor,
-				Logger:               slog.New(slog.NewJSONHandler(t.Output(), nil)),
 			})
-			_, gotErr := service.RefreshAccessToken(t.Context(), test.refreshJWS)
+			ctx := logging.NewContext(t.Context(), slog.New(slog.NewJSONHandler(t.Output(), nil)))
+			_, gotErr := service.RefreshAccessToken(ctx, test.refreshJWS)
 			if !errors.Is(gotErr, test.wantErr) {
 				t.Errorf(
 					"Service.RefreshAccessToken(...), gotErr=%q, wantErr=%q",
@@ -499,9 +500,9 @@ func TestService_ListRefreshTokens(t *testing.T) {
 				TokenAccessDuration:  1 * time.Hour,
 				TokenRefreshDuration: 90 * 24 * time.Hour,
 				Transactor:           test.transactor,
-				Logger:               slog.New(slog.NewJSONHandler(t.Output(), nil)),
 			})
-			_, gotErr := service.ListRefreshTokens(t.Context(), test.accessJWS)
+			ctx := logging.NewContext(t.Context(), slog.New(slog.NewJSONHandler(t.Output(), nil)))
+			_, gotErr := service.ListRefreshTokens(ctx, test.accessJWS)
 			if !errors.Is(gotErr, test.wantErr) {
 				t.Errorf(
 					"Service.ListRefreshTokens(...), gotErr=%q, wantErr=%q",
@@ -603,9 +604,9 @@ func TestService_DeleteRefreshToken(t *testing.T) {
 				TokenAccessDuration:  1 * time.Hour,
 				TokenRefreshDuration: 90 * 24 * time.Hour,
 				Transactor:           test.transactor,
-				Logger:               slog.New(slog.NewJSONHandler(t.Output(), nil)),
 			})
-			gotErr := service.DeleteRefreshToken(t.Context(), test.accessJWS, test.refreshTokenID)
+			ctx := logging.NewContext(t.Context(), slog.New(slog.NewJSONHandler(t.Output(), nil)))
+			gotErr := service.DeleteRefreshToken(ctx, test.accessJWS, test.refreshTokenID)
 			if !errors.Is(gotErr, test.wantErr) {
 				t.Errorf(
 					"Service.DeleteRefreshToken(...), gotErr=%q, wantErr=%q",
@@ -702,9 +703,9 @@ func TestService_DeleteUser(t *testing.T) {
 				TokenAccessDuration:  1 * time.Hour,
 				TokenRefreshDuration: 90 * 24 * time.Hour,
 				Transactor:           test.transactor,
-				Logger:               slog.New(slog.NewJSONHandler(t.Output(), nil)),
 			})
-			gotErr := service.DeleteUser(t.Context(), test.accessJWS, test.userID)
+			ctx := logging.NewContext(t.Context(), slog.New(slog.NewJSONHandler(t.Output(), nil)))
+			gotErr := service.DeleteUser(ctx, test.accessJWS, test.userID)
 			if !errors.Is(gotErr, test.wantErr) {
 				t.Errorf(
 					"Service.DeleteUser(...), gotErr=%q, wantErr=%q",
