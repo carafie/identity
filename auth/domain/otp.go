@@ -70,7 +70,7 @@ func NewCode() Code {
 	n, err := rand.Int(rand.Reader, max)
 	if err != nil {
 		// This should never happen.
-		panic(fmt.Errorf("failed to generate random code: %w", err))
+		panic(fmt.Errorf("domain.NewCode: failed to generate random code: %w", err))
 	}
 	return Code(fmt.Sprintf("%06d", n.Int64()))
 }

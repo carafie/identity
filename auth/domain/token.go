@@ -120,10 +120,10 @@ type TokenManager struct {
 
 func NewTokenManager(publicKey ed25519.PublicKey, privateKey ed25519.PrivateKey) *TokenManager {
 	if publicKey == nil {
-		panic("public key cannot be nil")
+		panic("domain.NewTokenManager: ed25519.PublicKey cannot be nil")
 	}
 	if privateKey == nil {
-		panic("private key cannot be nil")
+		panic("domain.NewTokenManager: ed25519.PrivateKey cannot be nil")
 	}
 	return &TokenManager{
 		publicKey:  publicKey,
