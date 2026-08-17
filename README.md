@@ -7,9 +7,9 @@
 
 ## About
 
-A simple identity management microservice.
+A simple user identity management microservice.
 
-It provides passwordless authentication via OTP codes
+It provides passwordless user authentication via OTP codes
 and manages access and refresh tokens (JWTs).
 
 You can review the REST API endpoints in the [API documentation](./API.md).
@@ -25,7 +25,7 @@ docker compose -f example.compose.yml up -d
 ```
 
 Outgoing emails are logged to stdout, as the example uses `MAILER=log`.
-Review `example.env` file for all available options.
+Review [example.env](./example.env) file for all available options.
 
 ## Disclaimer
 
