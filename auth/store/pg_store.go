@@ -52,9 +52,10 @@ func (p *pg) ConsumeOTP(ctx context.Context, otpID uuid.UUID) (*domain.OTP, erro
 	    RETURNING email, code, attempts, created_at, expires_at
 	`
 	row := otpRow{id: otpID}
-	if err := p.executor.QueryRowContext(ctx, query, otpID).Scan(
+	err := p.executor.QueryRowContext(ctx, query, otpID).Scan(
 		&row.email, &row.code, &row.attempts, &row.createdAt, &row.expiresAt,
-	); err != nil {
+	)
+	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, database.ErrNotFound
 		}
@@ -92,9 +93,10 @@ func (p *pg) GetUserByEmailOrCreate(ctx context.Context, user *domain.User) (*do
 		LIMIT 1
 	`
 	var row userRow
-	if err := p.executor.QueryRowContext(ctx, query, user.ID, user.Email, user.Email.Normalize()).Scan(
+	err := p.executor.QueryRowContext(ctx, query, user.ID, user.Email, user.Email.Normalize()).Scan(
 		&row.id, &row.email,
-	); err != nil {
+	)
+	if err != nil {
 		return nil, err
 	}
 	return row.Parse()
@@ -126,18 +128,17 @@ func (p *pg) CreateRefreshToken(ctx context.Context, token *domain.RefreshToken)
 	return err
 }
 
-func (p *pg) GetRefreshToken(ctx context.Context, userID, refreshTokenID uuid.UUID) (
-	*domain.RefreshToken, error,
-) {
+func (p *pg) GetRefreshToken(ctx context.Context, userID, refreshTokenID uuid.UUID) (*domain.RefreshToken, error) {
 	const query = `
 		SELECT email, created_at, expires_at
 		FROM refresh_tokens
 		WHERE user_id = $1 AND id = $2
 	`
 	row := refreshTokenRow{id: refreshTokenID, userID: userID}
-	if err := p.executor.QueryRowContext(ctx, query, userID, refreshTokenID).Scan(
+	err := p.executor.QueryRowContext(ctx, query, userID, refreshTokenID).Scan(
 		&row.email, &row.createdAt, &row.expiresAt,
-	); err != nil {
+	)
+	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, database.ErrNotFound
 		}
