@@ -2,17 +2,12 @@ package main
 
 import (
 	"context"
-	"crypto/ed25519"
-	"crypto/x509"
-	"encoding/pem"
 	"errors"
 	"fmt"
 	"log/slog"
 	"net/http"
 	"os"
 	"os/signal"
-	"strconv"
-	"time"
 
 	authDomain "github.com/carafie/identity/auth/domain"
 	authHandler "github.com/carafie/identity/auth/handler"
@@ -27,7 +22,7 @@ import (
 func main() {
 	config, err := parseConfig()
 	if err != nil {
-		fmt.Printf("failed to parse config: %v\n", err)
+		fmt.Println(err)
 		os.Exit(1)
 	}
 
@@ -121,154 +116,4 @@ func main() {
 		os.Exit(5)
 	}
 	logger.Info("http server graceful shutdown")
-}
-
-type config struct {
-	httpAddress      string
-	httpReadTimeout  time.Duration
-	httpWriteTimeout time.Duration
-
-	otpDuration    time.Duration
-	otpMaxAttempts int
-
-	jwtPublicKey       ed25519.PublicKey
-	jwtPrivateKey      ed25519.PrivateKey
-	jwtAccessDuration  time.Duration
-	jwtRefreshDuration time.Duration
-
-	databaseDataSourceName  string
-	databaseMaxIdleConns    int
-	databaseMaxOpenConns    int
-	databaseConnMaxIdleTime time.Duration
-	databaseConnMaxLifetime time.Duration
-
-	mailer                  string
-	mailerResendAPIKey      string
-	mailerTimeout           time.Duration
-	mailerFromAddress       string
-	mailerOTPRequestSubject string
-	mailerOTPRequestContent string
-
-	logLevel slog.Level
-}
-
-func parseConfig() (*config, error) {
-	httpAddress := os.Getenv("HTTP_ADDRESS")
-	httpReadTimeoutSeconds, err := strconv.Atoi(os.Getenv("HTTP_READ_TIMEOUT_SECONDS"))
-	if err != nil {
-		return nil, fmt.Errorf("failed to parse HTTP_READ_TIMEOUT_SECONDS: %w", err)
-	}
-	httpWriteTimeoutSeconds, err := strconv.Atoi(os.Getenv("HTTP_WRITE_TIMEOUT_SECONDS"))
-	if err != nil {
-		return nil, fmt.Errorf("failed to parse HTTP_WRITE_TIMEOUT_SECONDS: %w", err)
-	}
-
-	otpDurationSeconds, err := strconv.Atoi(os.Getenv("OTP_DURATION_SECONDS"))
-	if err != nil {
-		return nil, fmt.Errorf("failed to parse OTP_DURATION_SECONDS: %w", err)
-	}
-	otpMaxAttempts, err := strconv.Atoi(os.Getenv("OTP_MAX_ATTEMPTS"))
-	if err != nil {
-		return nil, fmt.Errorf("failed to parse OTP_MAX_ATTEMPTS: %w", err)
-	}
-
-	jwtPublicKeyFileBytes, err := os.ReadFile(os.Getenv("JWT_PUBLIC_KEY_FILE"))
-	if err != nil {
-		return nil, fmt.Errorf("failed to parse JWT_PUBLIC_KEY_FILE: %w", err)
-	}
-	jwtPublicKeyBlock, _ := pem.Decode(jwtPublicKeyFileBytes)
-	if jwtPublicKeyBlock == nil {
-		return nil, fmt.Errorf("failed to parse JWT_PUBLIC_KEY_FILE: failed to decode PEM block")
-	}
-	jwtPublicKeyAny, err := x509.ParsePKIXPublicKey(jwtPublicKeyBlock.Bytes)
-	if err != nil {
-		return nil, fmt.Errorf("failed to parse JWT_PUBLIC_KEY_FILE: %w", err)
-	}
-	jwtPublicKey, ok := jwtPublicKeyAny.(ed25519.PublicKey)
-	if !ok {
-		return nil, fmt.Errorf("failed to parse JWT_PUBLIC_KEY_FILE: key is not Ed25519 public key")
-	}
-
-	jwtPrivateKeyFileBytes, err := os.ReadFile(os.Getenv("JWT_PRIVATE_KEY_FILE"))
-	if err != nil {
-		return nil, fmt.Errorf("failed to parse JWT_PRIVATE_KEY_FILE: %w", err)
-	}
-	jwtPrivateKeyBlock, _ := pem.Decode(jwtPrivateKeyFileBytes)
-	if jwtPrivateKeyBlock == nil {
-		return nil, fmt.Errorf("failed to parse JWT_PRIVATE_KEY_FILE: failed to decode PEM block")
-	}
-	jwtPrivateKeyAny, err := x509.ParsePKCS8PrivateKey(jwtPrivateKeyBlock.Bytes)
-	if err != nil {
-		return nil, fmt.Errorf("failed to parse JWT_PRIVATE_KEY_FILE: %w", err)
-	}
-	jwtPrivateKey, ok := jwtPrivateKeyAny.(ed25519.PrivateKey)
-	if !ok {
-		return nil, fmt.Errorf("failed to parse JWT_PRIVATE_KEY_FILE: key is not Ed25519 private key")
-	}
-
-	jwtAccessDurationSeconds, err := strconv.Atoi(os.Getenv("JWT_ACCESS_DURATION_SECONDS"))
-	if err != nil {
-		return nil, fmt.Errorf("failed to parse JWT_ACCESS_DURATION_SECONDS: %w", err)
-	}
-	jwtRefreshDurationSeconds, err := strconv.Atoi(os.Getenv("JWT_REFRESH_DURATION_SECONDS"))
-	if err != nil {
-		return nil, fmt.Errorf("failed to parse JWT_REFRESH_DURATION_SECONDS: %w", err)
-	}
-
-	databaseDataSourceName := os.Getenv("DATABASE_DATA_SOURCE_NAME")
-	databaseMaxIdleConns, err := strconv.Atoi(os.Getenv("DATABASE_MAX_IDLE_CONNECTIONS"))
-	if err != nil {
-		return nil, fmt.Errorf("failed to parse DATABASE_MAX_IDLE_CONNECTIONS: %w", err)
-	}
-	databaseMaxOpenConns, err := strconv.Atoi(os.Getenv("DATABASE_MAX_OPEN_CONNECTIONS"))
-	if err != nil {
-		return nil, fmt.Errorf("failed to parse DATABASE_MAX_OPEN_CONNECTIONS: %w", err)
-	}
-	databaseConnMaxIdleTimeSeconds, err := strconv.Atoi(os.Getenv("DATABASE_CONNECTION_MAX_IDLE_TIME_SECONDS"))
-	if err != nil {
-		return nil, fmt.Errorf("failed to parse DATABASE_CONNECTION_MAX_IDLE_TIME_SECONDS: %w", err)
-	}
-	databaseConnMaxLifetimeSeconds, err := strconv.Atoi(os.Getenv("DATABASE_CONNECTION_MAX_LIFE_TIME_SECONDS"))
-	if err != nil {
-		return nil, fmt.Errorf("failed to parse DATABASE_CONNECTION_MAX_LIFE_TIME_SECONDS: %w", err)
-	}
-
-	mailer := os.Getenv("MAILER")
-	mailerResendAPIKey := os.Getenv("MAILER_RESEND_API_KEY")
-	mailerTimeoutSeconds, err := strconv.Atoi(os.Getenv("MAILER_TIMEOUT_SECONDS"))
-	if err != nil {
-		return nil, fmt.Errorf("failed to parse MAILER_TIMEOUT_SECONDS: %w", err)
-	}
-	mailerFromAddress := os.Getenv("MAILER_FROM_ADDRESS")
-	mailerOTPRequestSubject := os.Getenv("MAILER_OTP_REQUEST_SUBJECT")
-	mailerOTPRequestContent := os.Getenv("MAILER_OTP_REQUEST_CONTENT")
-
-	return &config{
-		httpAddress:      httpAddress,
-		httpReadTimeout:  time.Duration(httpReadTimeoutSeconds) * time.Second,
-		httpWriteTimeout: time.Duration(httpWriteTimeoutSeconds) * time.Second,
-
-		otpDuration:    time.Duration(otpDurationSeconds) * time.Second,
-		otpMaxAttempts: otpMaxAttempts,
-
-		jwtPublicKey:       jwtPublicKey,
-		jwtPrivateKey:      jwtPrivateKey,
-		jwtAccessDuration:  time.Duration(jwtAccessDurationSeconds) * time.Second,
-		jwtRefreshDuration: time.Duration(jwtRefreshDurationSeconds) * time.Second,
-
-		databaseDataSourceName:  databaseDataSourceName,
-		databaseMaxIdleConns:    databaseMaxIdleConns,
-		databaseMaxOpenConns:    databaseMaxOpenConns,
-		databaseConnMaxIdleTime: time.Duration(databaseConnMaxIdleTimeSeconds) * time.Second,
-		databaseConnMaxLifetime: time.Duration(databaseConnMaxLifetimeSeconds) * time.Second,
-
-		mailer:                  mailer,
-		mailerResendAPIKey:      mailerResendAPIKey,
-		mailerTimeout:           time.Duration(mailerTimeoutSeconds) * time.Second,
-		mailerFromAddress:       mailerFromAddress,
-		mailerOTPRequestSubject: mailerOTPRequestSubject,
-		mailerOTPRequestContent: mailerOTPRequestContent,
-
-		logLevel: slog.LevelInfo,
-	}, nil
 }
