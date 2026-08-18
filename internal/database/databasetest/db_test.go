@@ -1,7 +1,9 @@
 package databasetest
 
 import (
+	"context"
 	"testing"
+	"time"
 
 	"github.com/carafie/identity/internal/database"
 )
@@ -12,7 +14,10 @@ func TestOpen(t *testing.T) {
 	var db *database.DB
 
 	t.Run("open", func(innerT *testing.T) {
-		innerDB, close, err := Open(innerT.Context())
+		ctx, cancel := context.WithTimeout(innerT.Context(), time.Minute)
+		defer cancel()
+
+		innerDB, close, err := Open(ctx)
 		if err != nil {
 			innerT.Fatalf("failed to open: %v", err)
 		}
