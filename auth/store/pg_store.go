@@ -61,7 +61,7 @@ func (p *pg) ConsumeOTP(ctx context.Context, otpID uuid.UUID) (*domain.OTP, erro
 		}
 		return nil, err
 	}
-	return row.Parse()
+	return row.parse()
 }
 
 func (p *pg) DeleteOTP(ctx context.Context, otpID uuid.UUID) error {
@@ -99,7 +99,7 @@ func (p *pg) GetUserByEmailOrCreate(ctx context.Context, user *domain.User) (*do
 	if err != nil {
 		return nil, err
 	}
-	return row.Parse()
+	return row.parse()
 }
 
 func (p *pg) DeleteUser(ctx context.Context, userID uuid.UUID) error {
@@ -144,7 +144,7 @@ func (p *pg) GetRefreshToken(ctx context.Context, userID, refreshTokenID uuid.UU
 		}
 		return nil, err
 	}
-	return row.Parse()
+	return row.parse()
 }
 
 func (p *pg) ListRefreshTokens(ctx context.Context, userID uuid.UUID) ([]*domain.RefreshToken, error) {
@@ -166,7 +166,7 @@ func (p *pg) ListRefreshTokens(ctx context.Context, userID uuid.UUID) ([]*domain
 		if err := rows.Scan(&row.id, &row.email, &row.createdAt, &row.expiresAt); err != nil {
 			return nil, err
 		}
-		token, err := row.Parse()
+		token, err := row.parse()
 		if err != nil {
 			return nil, err
 		}
@@ -203,7 +203,7 @@ type otpRow struct {
 	expiresAt time.Time
 }
 
-func (r otpRow) Parse() (*domain.OTP, error) {
+func (r otpRow) parse() (*domain.OTP, error) {
 	email, err := mail.Parse(r.email)
 	if err != nil {
 		return nil, err
@@ -220,7 +220,7 @@ type userRow struct {
 	email string
 }
 
-func (r userRow) Parse() (*domain.User, error) {
+func (r userRow) parse() (*domain.User, error) {
 	email, err := mail.Parse(r.email)
 	if err != nil {
 		return nil, err
@@ -236,7 +236,7 @@ type refreshTokenRow struct {
 	expiresAt time.Time
 }
 
-func (r refreshTokenRow) Parse() (*domain.RefreshToken, error) {
+func (r refreshTokenRow) parse() (*domain.RefreshToken, error) {
 	email, err := mail.Parse(r.email)
 	if err != nil {
 		return nil, err
