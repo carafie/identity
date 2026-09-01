@@ -74,7 +74,7 @@ Set-Cookie: refresh_token=ey...; Path=/auth/tokens/refresh; ...
 | Cause                                              | Status Code               |
 | -------------------------------------------------- | ------------------------- |
 | Unexpected request format                          | 400 Bad Request           |
-| Invalid id or code, or mismatched code             | 422 Unprocessable Content |
+| Invalid or mismatched code                         | 422 Unprocessable Content |
 | Not found or expired code, or max attempts reached | 404 Not Found             |
 
 <br><br>
@@ -164,6 +164,7 @@ HTTP/1.1 204 No Content
 
 | Cause                           | Status Code      |
 | ------------------------------- | ---------------- |
+| Unexpected request format       | 400 Bad Request  |
 | Invalid or expired access token | 401 Unauthorized |
 
 <br><br>
@@ -188,4 +189,5 @@ HTTP/1.1 204 No Content
 
 | Cause                           | Status Code      |
 | ------------------------------- | ---------------- |
+| Unexpected request format       | 400 Bad Request  |
 | Invalid or expired access token | 401 Unauthorized |

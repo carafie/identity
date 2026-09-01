@@ -3,16 +3,16 @@ package handler
 import (
 	"log/slog"
 	"net/http"
+	"uuid"
 
 	"github.com/carafie/identity/internal/logging"
-	"github.com/google/uuid"
 )
 
 func WithRequestID(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		next.ServeHTTP(
 			w,
-			r.WithContext(logging.NewRequestIDContext(r.Context(), uuid.New())),
+			r.WithContext(logging.NewRequestIDContext(r.Context(), uuid.NewV7())),
 		)
 	})
 }

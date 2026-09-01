@@ -2,8 +2,7 @@ package domain
 
 import (
 	"log/slog"
-
-	"github.com/carafie/identity/internal/uuid"
+	"uuid"
 )
 
 const (

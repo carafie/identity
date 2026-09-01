@@ -8,12 +8,12 @@ import (
 	"os"
 	"testing"
 	"time"
+	"uuid"
 
 	"github.com/carafie/identity/auth/domain"
 	"github.com/carafie/identity/internal/database"
 	"github.com/carafie/identity/internal/database/databasetest"
 	"github.com/carafie/identity/internal/mail"
-	"github.com/carafie/identity/internal/uuid"
 	"github.com/google/go-cmp/cmp"
 )
 
@@ -148,7 +148,7 @@ func TestPg_ConsumeOTP(t *testing.T) {
 		t.Parallel()
 		store := newTestPgStore(t)
 
-		_, err := store.ConsumeOTP(t.Context(), uuid.New())
+		_, err := store.ConsumeOTP(t.Context(), uuid.NewV7())
 		if !errors.Is(err, database.ErrNotFound) {
 			t.Errorf("ConsumeOTP(), gotErr=%v, wantErr=%v", err, database.ErrNotFound)
 		}
@@ -177,7 +177,7 @@ func TestPg_DeleteOTP(t *testing.T) {
 		t.Parallel()
 		store := newTestPgStore(t)
 
-		if err := store.DeleteOTP(t.Context(), uuid.New()); !errors.Is(err, database.ErrNotFound) {
+		if err := store.DeleteOTP(t.Context(), uuid.NewV7()); !errors.Is(err, database.ErrNotFound) {
 			t.Fatalf("DeleteOTP(), gotErr=%v, wantErr=%v", err, database.ErrNotFound)
 		}
 	})
@@ -266,7 +266,7 @@ func TestPg_DeleteUser(t *testing.T) {
 		t.Parallel()
 		store := newTestPgStore(t)
 
-		err := store.DeleteUser(t.Context(), uuid.New())
+		err := store.DeleteUser(t.Context(), uuid.NewV7())
 		if !errors.Is(err, database.ErrNotFound) {
 			t.Errorf("DeleteUser(), gotErr=%v, wantErr=%v", err, database.ErrNotFound)
 		}
@@ -339,7 +339,7 @@ func TestPg_GetRefreshToken(t *testing.T) {
 		t.Parallel()
 		store := newTestPgStore(t)
 
-		_, err := store.GetRefreshToken(t.Context(), uuid.New(), uuid.New())
+		_, err := store.GetRefreshToken(t.Context(), uuid.NewV7(), uuid.NewV7())
 		if !errors.Is(err, database.ErrNotFound) {
 			t.Errorf("GetRefreshToken(), gotErr=%v, wantErr=%v", err, database.ErrNotFound)
 		}
@@ -368,7 +368,7 @@ func TestPg_ListRefreshTokens(t *testing.T) {
 		t.Parallel()
 		store := newTestPgStore(t)
 
-		refreshTokens, err := store.ListRefreshTokens(t.Context(), uuid.New())
+		refreshTokens, err := store.ListRefreshTokens(t.Context(), uuid.NewV7())
 		if err != nil {
 			t.Fatalf("ListRefreshTokens(), gotErr=%v, wantErr=%v", err, nil)
 		}
@@ -400,7 +400,7 @@ func TestPg_DeleteRefreshToken(t *testing.T) {
 		t.Parallel()
 		store := newTestPgStore(t)
 
-		err := store.DeleteRefreshToken(t.Context(), uuid.New(), uuid.New())
+		err := store.DeleteRefreshToken(t.Context(), uuid.NewV7(), uuid.NewV7())
 		if !errors.Is(err, database.ErrNotFound) {
 			t.Errorf("DeleteRefreshToken(), gotErr=%v, wantErr=%v", err, database.ErrNotFound)
 		}

@@ -3,8 +3,7 @@ package logging
 import (
 	"context"
 	"log/slog"
-
-	"github.com/carafie/identity/internal/uuid"
+	"uuid"
 )
 
 type ctxKey int

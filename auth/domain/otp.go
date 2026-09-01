@@ -6,10 +6,10 @@ import (
 	"fmt"
 	"math/big"
 	"time"
+	"uuid"
 
 	"github.com/carafie/identity/internal/clock"
 	"github.com/carafie/identity/internal/mail"
-	"github.com/carafie/identity/internal/uuid"
 )
 
 var (
@@ -30,7 +30,7 @@ type OTP struct {
 func NewOTP(email mail.Email, duration time.Duration) *OTP {
 	now := clock.Normalize(time.Now())
 	return &OTP{
-		ID:        uuid.New(),
+		ID:        uuid.NewV7(),
 		Email:     email,
 		Code:      NewCode(),
 		Attempts:  0,

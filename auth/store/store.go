@@ -2,10 +2,10 @@ package store
 
 import (
 	"context"
+	"uuid"
 
 	"github.com/carafie/identity/auth/domain"
 	"github.com/carafie/identity/internal/database"
-	"github.com/carafie/identity/internal/uuid"
 )
 
 type Factory interface {

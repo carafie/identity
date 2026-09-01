@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"time"
+	"uuid"
 
 	"github.com/carafie/identity/auth/domain"
 	"github.com/carafie/identity/auth/mailer"
@@ -12,7 +13,6 @@ import (
 	"github.com/carafie/identity/internal/database"
 	"github.com/carafie/identity/internal/logging"
 	"github.com/carafie/identity/internal/mail"
-	"github.com/carafie/identity/internal/uuid"
 )
 
 type Service struct {
@@ -102,22 +102,17 @@ func (s *Service) RequestOTP(ctx context.Context, email string) (*domain.OTP, er
 	return otp, nil
 }
 
-func (s *Service) ConfirmOTP(ctx context.Context, otpID, code string) (
+func (s *Service) ConfirmOTP(ctx context.Context, otpID uuid.UUID, code string) (
 	*domain.AccessToken, *domain.RefreshToken, error,
 ) {
 	l := logging.FromContext(ctx)
+	l = l.With(domain.OTPID(otpID))
 
-	parsedOTPID, err := uuid.Parse(otpID)
-	if err != nil {
-		l.WarnContext(ctx, "parse otp id", logging.Error(err))
-		return nil, nil, err
-	}
 	parsedCode, err := domain.ParseCode(code)
 	if err != nil {
 		l.WarnContext(ctx, "parse otp code", logging.Error(err))
 		return nil, nil, err
 	}
-	l = l.With(domain.OTPID(parsedOTPID))
 
 	var (
 		accessToken  *domain.AccessToken
@@ -127,7 +122,7 @@ func (s *Service) ConfirmOTP(ctx context.Context, otpID, code string) (
 	err = s.transactor.Atomic(ctx, func(ctx context.Context, executor database.Executor) error {
 		store := s.storeFactory.New(executor)
 
-		otp, err := store.ConsumeOTP(ctx, parsedOTPID)
+		otp, err := store.ConsumeOTP(ctx, otpID)
 		if err != nil {
 			if errors.Is(err, database.ErrNotFound) {
 				err = domain.ErrCodeExpired
@@ -232,8 +227,9 @@ func (s *Service) ListRefreshTokens(ctx context.Context, accessJWS string) ([]*d
 	return refreshTokens, nil
 }
 
-func (s *Service) DeleteRefreshToken(ctx context.Context, accessJWS, refreshTokenID string) error {
+func (s *Service) DeleteRefreshToken(ctx context.Context, accessJWS string, refreshTokenID uuid.UUID) error {
 	l := logging.FromContext(ctx)
+	l = l.With(domain.RefreshTokenID(refreshTokenID))
 
 	accessToken, err := s.tokenManager.ParseAccess(accessJWS)
 	if err != nil {
@@ -242,16 +238,9 @@ func (s *Service) DeleteRefreshToken(ctx context.Context, accessJWS, refreshToke
 	}
 	l = l.With(domain.UserID(accessToken.UserID))
 
-	parsedRefreshTokenID, err := uuid.Parse(refreshTokenID)
-	if err != nil {
-		l.WarnContext(ctx, "invalid refresh token id")
-		return domain.ErrTokenInvalid
-	}
-	l = l.With(domain.RefreshTokenID(parsedRefreshTokenID))
-
 	err = s.transactor.Single(ctx, func(ctx context.Context, executor database.Executor) error {
 		store := s.storeFactory.New(executor)
-		if err := store.DeleteRefreshToken(ctx, accessToken.UserID, parsedRefreshTokenID); err != nil {
+		if err := store.DeleteRefreshToken(ctx, accessToken.UserID, refreshTokenID); err != nil {
 			if errors.Is(err, database.ErrNotFound) {
 				err = domain.ErrTokenNotFound
 			}
@@ -267,27 +256,22 @@ func (s *Service) DeleteRefreshToken(ctx context.Context, accessJWS, refreshToke
 	return nil
 }
 
-func (s *Service) DeleteUser(ctx context.Context, accessJWS, userID string) error {
+func (s *Service) DeleteUser(ctx context.Context, accessJWS string, userID uuid.UUID) error {
 	l := logging.FromContext(ctx)
+	l = l.With(domain.UserID(userID))
 
 	accessToken, err := s.tokenManager.ParseAccess(accessJWS)
 	if err != nil {
 		l.WarnContext(ctx, "parse access token", logging.Error(err))
 		return domain.ErrTokenInvalid
 	}
-	l = l.With(domain.UserID(accessToken.UserID))
-
-	parsedUserID, err := uuid.Parse(userID)
-	if err != nil {
-		return domain.ErrUserNotFound
-	}
-	if parsedUserID != accessToken.UserID {
+	if accessToken.UserID != userID {
 		return domain.ErrUserNotFound
 	}
 
 	err = s.transactor.Single(ctx, func(ctx context.Context, executor database.Executor) error {
 		store := s.storeFactory.New(executor)
-		if err := store.DeleteUser(ctx, parsedUserID); err != nil {
+		if err := store.DeleteUser(ctx, userID); err != nil {
 			if errors.Is(err, database.ErrNotFound) {
 				err = domain.ErrUserNotFound
 			}

@@ -8,6 +8,7 @@ import (
 	"log/slog"
 	"testing"
 	"time"
+	"uuid"
 
 	"github.com/carafie/identity/auth/domain"
 	"github.com/carafie/identity/auth/mailer"
@@ -15,7 +16,6 @@ import (
 	"github.com/carafie/identity/internal/database"
 	"github.com/carafie/identity/internal/logging"
 	"github.com/carafie/identity/internal/mail"
-	"github.com/carafie/identity/internal/uuid"
 )
 
 var errTest = errors.New("expected test error")
@@ -209,23 +209,15 @@ func TestService_ConfirmOTP(t *testing.T) {
 		storeFactory   store.Factory
 		otpMaxAttempts int
 		transactor     database.Transactor
-		otpID          string
+		otpID          uuid.UUID
 		code           string
 		wantErr        error
 	}{
-		"invalid otp id": {
-			storeFactory:   testStoreFactory{testStore{}},
-			otpMaxAttempts: 3,
-			transactor:     testTransactor{},
-			otpID:          "",
-			code:           string(otp.Code),
-			wantErr:        uuid.ErrInvalid,
-		},
 		"invalid code": {
 			storeFactory:   testStoreFactory{testStore{}},
 			otpMaxAttempts: 3,
 			transactor:     testTransactor{},
-			otpID:          otp.ID.String(),
+			otpID:          otp.ID,
 			code:           "",
 			wantErr:        domain.ErrCodeInvalid,
 		},
@@ -233,7 +225,7 @@ func TestService_ConfirmOTP(t *testing.T) {
 			storeFactory:   testStoreFactory{testStore{consumeOTP: otp, getUserByEmailOrCreate: user}},
 			otpMaxAttempts: 3,
 			transactor:     testTransactor{atomicErr: errTest},
-			otpID:          otp.ID.String(),
+			otpID:          otp.ID,
 			code:           string(otp.Code),
 			wantErr:        errTest,
 		},
@@ -241,7 +233,7 @@ func TestService_ConfirmOTP(t *testing.T) {
 			storeFactory:   testStoreFactory{testStore{consumeOTPErr: errTest}},
 			otpMaxAttempts: 3,
 			transactor:     testTransactor{},
-			otpID:          otp.ID.String(),
+			otpID:          otp.ID,
 			code:           string(otp.Code),
 			wantErr:        errTest,
 		},
@@ -249,7 +241,7 @@ func TestService_ConfirmOTP(t *testing.T) {
 			storeFactory:   testStoreFactory{testStore{consumeOTPErr: database.ErrNotFound}},
 			otpMaxAttempts: 3,
 			transactor:     testTransactor{},
-			otpID:          otp.ID.String(),
+			otpID:          otp.ID,
 			code:           string(otp.Code),
 			wantErr:        domain.ErrCodeExpired,
 		},
@@ -257,7 +249,7 @@ func TestService_ConfirmOTP(t *testing.T) {
 			storeFactory:   testStoreFactory{testStore{consumeOTP: domain.NewOTP(email, -1)}},
 			otpMaxAttempts: 3,
 			transactor:     testTransactor{},
-			otpID:          otp.ID.String(),
+			otpID:          otp.ID,
 			code:           string(otp.Code),
 			wantErr:        domain.ErrCodeExpired,
 		},
@@ -265,7 +257,7 @@ func TestService_ConfirmOTP(t *testing.T) {
 			storeFactory:   testStoreFactory{testStore{consumeOTP: otp}},
 			otpMaxAttempts: 0,
 			transactor:     testTransactor{},
-			otpID:          otp.ID.String(),
+			otpID:          otp.ID,
 			code:           string(otp.Code),
 			wantErr:        domain.ErrCodeExpired,
 		},
@@ -273,7 +265,7 @@ func TestService_ConfirmOTP(t *testing.T) {
 			storeFactory:   testStoreFactory{testStore{consumeOTP: otp}},
 			otpMaxAttempts: 3,
 			transactor:     testTransactor{},
-			otpID:          otp.ID.String(),
+			otpID:          otp.ID,
 			code:           string(domain.NewCode()),
 			wantErr:        domain.ErrCodeMismatched,
 		},
@@ -281,7 +273,7 @@ func TestService_ConfirmOTP(t *testing.T) {
 			storeFactory:   testStoreFactory{testStore{consumeOTP: otp, deleteOTPErr: errTest}},
 			otpMaxAttempts: 3,
 			transactor:     testTransactor{},
-			otpID:          otp.ID.String(),
+			otpID:          otp.ID,
 			code:           string(otp.Code),
 			wantErr:        errTest,
 		},
@@ -289,7 +281,7 @@ func TestService_ConfirmOTP(t *testing.T) {
 			storeFactory:   testStoreFactory{testStore{consumeOTP: otp, getUserByEmailOrCreateErr: errTest}},
 			otpMaxAttempts: 3,
 			transactor:     testTransactor{},
-			otpID:          otp.ID.String(),
+			otpID:          otp.ID,
 			code:           string(otp.Code),
 			wantErr:        errTest,
 		},
@@ -299,7 +291,7 @@ func TestService_ConfirmOTP(t *testing.T) {
 			},
 			otpMaxAttempts: 3,
 			transactor:     testTransactor{},
-			otpID:          otp.ID.String(),
+			otpID:          otp.ID,
 			code:           string(otp.Code),
 			wantErr:        errTest,
 		},
@@ -307,7 +299,7 @@ func TestService_ConfirmOTP(t *testing.T) {
 			storeFactory:   testStoreFactory{testStore{consumeOTP: otp, getUserByEmailOrCreate: user}},
 			otpMaxAttempts: 3,
 			transactor:     testTransactor{},
-			otpID:          otp.ID.String(),
+			otpID:          otp.ID,
 			code:           string(otp.Code),
 			wantErr:        nil,
 		},
@@ -539,56 +531,49 @@ func TestService_DeleteRefreshToken(t *testing.T) {
 		storeFactory   store.Factory
 		transactor     database.Transactor
 		accessJWS      string
-		refreshTokenID string
+		refreshTokenID uuid.UUID
 		wantErr        error
 	}{
 		"invalid access jws": {
 			storeFactory:   testStoreFactory{testStore{}},
 			transactor:     testTransactor{},
 			accessJWS:      "invalid",
-			refreshTokenID: refreshToken.ID.String(),
+			refreshTokenID: refreshToken.ID,
 			wantErr:        domain.ErrTokenInvalid,
 		},
 		"expired access token": {
 			storeFactory:   testStoreFactory{testStore{}},
 			transactor:     testTransactor{},
 			accessJWS:      expiredAccessToken.JWS,
-			refreshTokenID: refreshToken.ID.String(),
+			refreshTokenID: refreshToken.ID,
 			wantErr:        domain.ErrTokenInvalid,
 		},
 		"invalid token kind": {
 			storeFactory:   testStoreFactory{testStore{}},
 			transactor:     testTransactor{},
 			accessJWS:      invalidKindToken.JWS,
-			refreshTokenID: refreshToken.ID.String(),
-			wantErr:        domain.ErrTokenInvalid,
-		},
-		"invalid refresh token id": {
-			storeFactory:   testStoreFactory{testStore{}},
-			transactor:     testTransactor{},
-			accessJWS:      invalidKindToken.JWS,
-			refreshTokenID: "invalid",
+			refreshTokenID: refreshToken.ID,
 			wantErr:        domain.ErrTokenInvalid,
 		},
 		"transactor single error": {
 			storeFactory:   testStoreFactory{testStore{}},
 			transactor:     testTransactor{singleErr: errTest},
 			accessJWS:      accessToken.JWS,
-			refreshTokenID: refreshToken.ID.String(),
+			refreshTokenID: refreshToken.ID,
 			wantErr:        errTest,
 		},
 		"store delete refresh token error": {
 			storeFactory:   testStoreFactory{testStore{deleteRefreshTokenErr: errTest}},
 			transactor:     testTransactor{},
 			accessJWS:      accessToken.JWS,
-			refreshTokenID: refreshToken.ID.String(),
+			refreshTokenID: refreshToken.ID,
 			wantErr:        errTest,
 		},
 		"success": {
 			storeFactory:   testStoreFactory{testStore{}},
 			transactor:     testTransactor{},
 			accessJWS:      accessToken.JWS,
-			refreshTokenID: refreshToken.ID.String(),
+			refreshTokenID: refreshToken.ID,
 			wantErr:        nil,
 		},
 	}
@@ -638,56 +623,49 @@ func TestService_DeleteUser(t *testing.T) {
 		storeFactory store.Factory
 		transactor   database.Transactor
 		accessJWS    string
-		userID       string
+		userID       uuid.UUID
 		wantErr      error
 	}{
 		"invalid access jws": {
 			storeFactory: testStoreFactory{testStore{}},
 			transactor:   testTransactor{},
 			accessJWS:    "invalid",
-			userID:       user.ID.String(),
+			userID:       user.ID,
 			wantErr:      domain.ErrTokenInvalid,
 		},
 		"expired access token": {
 			storeFactory: testStoreFactory{testStore{}},
 			transactor:   testTransactor{},
 			accessJWS:    expiredAccessToken.JWS,
-			userID:       user.ID.String(),
+			userID:       user.ID,
 			wantErr:      domain.ErrTokenInvalid,
 		},
 		"invalid token kind": {
 			storeFactory: testStoreFactory{testStore{}},
 			transactor:   testTransactor{},
 			accessJWS:    invalidKindToken.JWS,
-			userID:       user.ID.String(),
-			wantErr:      domain.ErrTokenInvalid,
-		},
-		"invalid user id": {
-			storeFactory: testStoreFactory{testStore{}},
-			transactor:   testTransactor{},
-			accessJWS:    invalidKindToken.JWS,
-			userID:       "invalid",
+			userID:       user.ID,
 			wantErr:      domain.ErrTokenInvalid,
 		},
 		"transactor single error": {
 			storeFactory: testStoreFactory{testStore{}},
 			transactor:   testTransactor{singleErr: errTest},
 			accessJWS:    accessToken.JWS,
-			userID:       user.ID.String(),
+			userID:       user.ID,
 			wantErr:      errTest,
 		},
 		"store delete user error": {
 			storeFactory: testStoreFactory{testStore{deleteUserErr: errTest}},
 			transactor:   testTransactor{},
 			accessJWS:    accessToken.JWS,
-			userID:       user.ID.String(),
+			userID:       user.ID,
 			wantErr:      errTest,
 		},
 		"success": {
 			storeFactory: testStoreFactory{testStore{}},
 			transactor:   testTransactor{},
 			accessJWS:    accessToken.JWS,
-			userID:       user.ID.String(),
+			userID:       user.ID,
 			wantErr:      nil,
 		},
 	}

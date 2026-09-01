@@ -5,10 +5,10 @@ import (
 	"errors"
 	"fmt"
 	"time"
+	"uuid"
 
 	"github.com/carafie/identity/internal/clock"
 	"github.com/carafie/identity/internal/mail"
-	"github.com/carafie/identity/internal/uuid"
 	"github.com/golang-jwt/jwt/v5"
 )
 
@@ -55,7 +55,7 @@ func LoadRefreshToken(id, userID uuid.UUID, email mail.Email, createdAt, expires
 func newToken(userID uuid.UUID, email mail.Email, kind Kind, duration time.Duration) *Token {
 	now := clock.Normalize(time.Now())
 	return &Token{
-		ID:        uuid.New(),
+		ID:        uuid.NewV7(),
 		UserID:    userID,
 		Email:     email,
 		Kind:      kind,

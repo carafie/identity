@@ -2,9 +2,9 @@ package domain
 
 import (
 	"errors"
+	"uuid"
 
 	"github.com/carafie/identity/internal/mail"
-	"github.com/carafie/identity/internal/uuid"
 )
 
 var ErrUserNotFound = errors.New("user not found")
@@ -16,7 +16,7 @@ type User struct {
 
 func NewUser(email mail.Email) *User {
 	return &User{
-		ID:    uuid.New(),
+		ID:    uuid.NewV7(),
 		Email: email,
 	}
 }

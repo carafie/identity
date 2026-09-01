@@ -1,17 +1,17 @@
 package handler
 
 import (
-	"encoding/json"
+	"encoding/json/v2"
 	"errors"
 	"net/http"
 	"time"
+	"uuid"
 
 	"github.com/carafie/identity/auth/domain"
 	"github.com/carafie/identity/auth/service"
 	"github.com/carafie/identity/internal/httpx"
 	"github.com/carafie/identity/internal/logging"
 	"github.com/carafie/identity/internal/mail"
-	"github.com/carafie/identity/internal/uuid"
 )
 
 type Handler struct {
@@ -35,7 +35,7 @@ func (h *Handler) RequestOTP(w http.ResponseWriter, r *http.Request) httpx.Respo
 	requestID := logging.RequestIDFromContext(r.Context())
 
 	var params requestOTPParams
-	if err := json.NewDecoder(r.Body).Decode(&params); err != nil {
+	if err := json.UnmarshalRead(r.Body, &params); err != nil {
 		return httpx.Response{StatusCode: http.StatusBadRequest, RequestID: requestID}
 	}
 
@@ -69,10 +69,13 @@ type confirmOTPResponse struct {
 func (h *Handler) ConfirmOTP(w http.ResponseWriter, r *http.Request) httpx.Response {
 	requestID := logging.RequestIDFromContext(r.Context())
 
-	otpID := r.PathValue("id")
+	otpID, err := uuid.Parse(r.PathValue("id"))
+	if err != nil {
+		return httpx.Response{StatusCode: http.StatusBadRequest, RequestID: requestID}
+	}
 
 	var params confirmOTPParams
-	if err := json.NewDecoder(r.Body).Decode(&params); err != nil {
+	if err := json.UnmarshalRead(r.Body, &params); err != nil {
 		return httpx.Response{StatusCode: http.StatusBadRequest, RequestID: requestID}
 	}
 
@@ -80,8 +83,7 @@ func (h *Handler) ConfirmOTP(w http.ResponseWriter, r *http.Request) httpx.Respo
 	if err != nil {
 		statusCode := http.StatusInternalServerError
 		switch {
-		case errors.Is(err, uuid.ErrInvalid),
-			errors.Is(err, domain.ErrCodeInvalid),
+		case errors.Is(err, domain.ErrCodeInvalid),
 			errors.Is(err, domain.ErrCodeMismatched):
 			statusCode = http.StatusUnprocessableEntity
 		case errors.Is(err, domain.ErrCodeExpired):
@@ -149,6 +151,7 @@ func (h *Handler) ListRefreshTokens(w http.ResponseWriter, r *http.Request) http
 	if accessJWS == "" {
 		return httpx.Response{StatusCode: http.StatusUnauthorized, RequestID: requestID}
 	}
+
 	tokens, err := h.service.ListRefreshTokens(r.Context(), accessJWS)
 	if err != nil {
 		statusCode := http.StatusInternalServerError
@@ -181,13 +184,17 @@ func (h *Handler) RegisterListRefreshTokens(mux *http.ServeMux) {
 func (h *Handler) DeleteRefreshToken(w http.ResponseWriter, r *http.Request) httpx.Response {
 	requestID := logging.RequestIDFromContext(r.Context())
 
-	refreshTokenID := r.PathValue("id")
+	refreshTokenID, err := uuid.Parse(r.PathValue("id"))
+	if err != nil {
+		return httpx.Response{StatusCode: http.StatusBadRequest, RequestID: requestID}
+	}
 
 	accessJWS := AccessJWSFromRequest(r)
 	if accessJWS == "" {
 		return httpx.Response{StatusCode: http.StatusUnauthorized, RequestID: requestID}
 	}
-	err := h.service.DeleteRefreshToken(r.Context(), accessJWS, refreshTokenID)
+
+	err = h.service.DeleteRefreshToken(r.Context(), accessJWS, refreshTokenID)
 	if err != nil {
 		statusCode := http.StatusInternalServerError
 		switch {
@@ -212,7 +219,10 @@ func (h *Handler) RegisterDeleteRefreshToken(mux *http.ServeMux) {
 func (h *Handler) DeleteUser(w http.ResponseWriter, r *http.Request) httpx.Response {
 	requestID := logging.RequestIDFromContext(r.Context())
 
-	userID := r.PathValue("id")
+	userID, err := uuid.Parse(r.PathValue("id"))
+	if err != nil {
+		return httpx.Response{StatusCode: http.StatusBadRequest, RequestID: requestID}
+	}
 
 	accessJWS := AccessJWSFromRequest(r)
 	if accessJWS == "" {

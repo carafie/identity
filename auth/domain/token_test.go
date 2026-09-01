@@ -6,9 +6,9 @@ import (
 	"reflect"
 	"testing"
 	"time"
+	"uuid"
 
 	"github.com/carafie/identity/internal/mail"
-	"github.com/carafie/identity/internal/uuid"
 )
 
 func TestManager_SignAndParse(t *testing.T) {
@@ -30,7 +30,7 @@ func TestManager_SignAndParse(t *testing.T) {
 		manager1 := newManager(t)
 		manager2 := newManager(t)
 
-		token := newToken(uuid.New(), email, KindRefresh, time.Hour)
+		token := newToken(uuid.NewV7(), email, KindRefresh, time.Hour)
 		err := manager1.sign(token)
 		if err != nil {
 			t.Fatalf("failed to sign token: %v", err)
@@ -44,7 +44,7 @@ func TestManager_SignAndParse(t *testing.T) {
 	t.Run("token expired", func(t *testing.T) {
 		manager := newManager(t)
 
-		token := newToken(uuid.New(), email, KindRefresh, -time.Hour)
+		token := newToken(uuid.NewV7(), email, KindRefresh, -time.Hour)
 		err := manager.sign(token)
 		if err != nil {
 			t.Fatalf("failed to sign token: %v", err)
@@ -58,7 +58,7 @@ func TestManager_SignAndParse(t *testing.T) {
 	t.Run("success", func(t *testing.T) {
 		manager := newManager(t)
 
-		token := newToken(uuid.New(), email, KindRefresh, time.Hour)
+		token := newToken(uuid.NewV7(), email, KindRefresh, time.Hour)
 		err := manager.sign(token)
 		if err != nil {
 			t.Fatalf("failed to sign token: %v", err)
@@ -89,7 +89,7 @@ func TestManager_SignAccessAndParseAccess(t *testing.T) {
 	}
 
 	t.Run("success", func(t *testing.T) {
-		token := NewAccessToken(uuid.New(), email, time.Hour)
+		token := NewAccessToken(uuid.NewV7(), email, time.Hour)
 		err := manager.SignAccess(token)
 		if err != nil {
 			t.Fatalf("failed to sign access token: %v", err)
@@ -120,7 +120,7 @@ func TestManager_SignRefreshAndParseRefresh(t *testing.T) {
 	}
 
 	t.Run("success", func(t *testing.T) {
-		token := NewRefreshToken(uuid.New(), email, time.Hour)
+		token := NewRefreshToken(uuid.NewV7(), email, time.Hour)
 		err := manager.SignRefresh(token)
 		if err != nil {
 			t.Fatalf("failed to sign refresh token: %v", err)

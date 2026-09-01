@@ -1,10 +1,9 @@
 package httpx
 
 import (
-	"encoding/json"
+	"encoding/json/v2"
 	"net/http"
-
-	"github.com/carafie/identity/internal/uuid"
+	"uuid"
 )
 
 type Response struct {
@@ -18,6 +17,6 @@ func (r Response) Respond(w http.ResponseWriter) {
 	w.Header().Add("X-Request-ID", r.RequestID.String())
 	w.WriteHeader(r.StatusCode)
 	if r.Body != nil {
-		json.NewEncoder(w).Encode(r.Body)
+		json.MarshalWrite(w, r.Body)
 	}
 }

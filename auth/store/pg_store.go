@@ -5,11 +5,11 @@ import (
 	"database/sql"
 	"errors"
 	"time"
+	"uuid"
 
 	"github.com/carafie/identity/auth/domain"
 	"github.com/carafie/identity/internal/database"
 	"github.com/carafie/identity/internal/mail"
-	"github.com/carafie/identity/internal/uuid"
 )
 
 type PgFactory struct{}
