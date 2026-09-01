@@ -31,7 +31,7 @@ type requestOTPResponse struct {
 	ExpiresAt time.Time `json:"expires_at"`
 }
 
-func (h *Handler) RequestOTP(w http.ResponseWriter, r *http.Request) httpx.Response {
+func (h *Handler) RequestOTP(r *http.Request) httpx.Response {
 	requestID := logging.RequestIDFromContext(r.Context())
 
 	var params requestOTPParams
@@ -66,7 +66,7 @@ type confirmOTPResponse struct {
 	AccessToken string `json:"access_token"`
 }
 
-func (h *Handler) ConfirmOTP(w http.ResponseWriter, r *http.Request) httpx.Response {
+func (h *Handler) ConfirmOTP(r *http.Request) httpx.Response {
 	requestID := logging.RequestIDFromContext(r.Context())
 
 	otpID, err := uuid.Parse(r.PathValue("id"))
@@ -92,10 +92,10 @@ func (h *Handler) ConfirmOTP(w http.ResponseWriter, r *http.Request) httpx.Respo
 		return httpx.Response{StatusCode: statusCode, RequestID: requestID}
 	}
 
-	SetRefreshCookie(w, refresh)
 	return httpx.Response{
 		StatusCode: http.StatusCreated,
 		RequestID:  requestID,
+		Cookies:    []*http.Cookie{NewRefreshTokenCookie(refresh)},
 		Body:       confirmOTPResponse{AccessToken: access.JWS},
 	}
 }
@@ -108,10 +108,10 @@ type refreshAccessTokenResponse struct {
 	AccessToken string `json:"access_token"`
 }
 
-func (h *Handler) RefreshAccessToken(w http.ResponseWriter, r *http.Request) httpx.Response {
+func (h *Handler) RefreshAccessToken(r *http.Request) httpx.Response {
 	requestID := logging.RequestIDFromContext(r.Context())
 
-	refreshCookie, err := GetRefreshCookie(r)
+	refreshCookie, err := GetRefreshTokenCookie(r)
 	if err != nil {
 		return httpx.Response{StatusCode: http.StatusUnauthorized, RequestID: requestID}
 	}
@@ -144,7 +144,7 @@ type listRefreshTokensResponse struct {
 	ExpiresAt time.Time `json:"expires_at"`
 }
 
-func (h *Handler) ListRefreshTokens(w http.ResponseWriter, r *http.Request) httpx.Response {
+func (h *Handler) ListRefreshTokens(r *http.Request) httpx.Response {
 	requestID := logging.RequestIDFromContext(r.Context())
 
 	accessJWS := AccessJWSFromRequest(r)
@@ -181,7 +181,7 @@ func (h *Handler) RegisterListRefreshTokens(mux *http.ServeMux) {
 	mux.Handle("GET /auth/tokens", httpx.Handler(h.ListRefreshTokens))
 }
 
-func (h *Handler) DeleteRefreshToken(w http.ResponseWriter, r *http.Request) httpx.Response {
+func (h *Handler) DeleteRefreshToken(r *http.Request) httpx.Response {
 	requestID := logging.RequestIDFromContext(r.Context())
 
 	refreshTokenID, err := uuid.Parse(r.PathValue("id"))
@@ -216,7 +216,7 @@ func (h *Handler) RegisterDeleteRefreshToken(mux *http.ServeMux) {
 	mux.Handle("DELETE /auth/tokens/{id}", httpx.Handler(h.DeleteRefreshToken))
 }
 
-func (h *Handler) DeleteUser(w http.ResponseWriter, r *http.Request) httpx.Response {
+func (h *Handler) DeleteUser(r *http.Request) httpx.Response {
 	requestID := logging.RequestIDFromContext(r.Context())
 
 	userID, err := uuid.Parse(r.PathValue("id"))

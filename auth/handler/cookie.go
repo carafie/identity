@@ -7,8 +7,8 @@ import (
 	"github.com/carafie/identity/internal/clock"
 )
 
-func SetRefreshCookie(w http.ResponseWriter, refreshToken *domain.RefreshToken) {
-	http.SetCookie(w, &http.Cookie{
+func NewRefreshTokenCookie(refreshToken *domain.RefreshToken) *http.Cookie {
+	return &http.Cookie{
 		Name:     "refresh_token",
 		Value:    refreshToken.JWS,
 		Path:     "/auth/tokens/refresh",
@@ -16,9 +16,9 @@ func SetRefreshCookie(w http.ResponseWriter, refreshToken *domain.RefreshToken) 
 		Secure:   true,
 		HttpOnly: true,
 		SameSite: http.SameSiteLaxMode,
-	})
+	}
 }
 
-func GetRefreshCookie(r *http.Request) (*http.Cookie, error) {
+func GetRefreshTokenCookie(r *http.Request) (*http.Cookie, error) {
 	return r.Cookie("refresh_token")
 }
