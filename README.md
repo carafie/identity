@@ -1,10 +1,5 @@
 # Identity Service
 
-> [!NOTE]
-> Project is under development.
->
-> <img src="https://raw.githubusercontent.com/MariaLetta/free-gophers-pack/9bb81600dd2a9ac5a68799f9a57f02f7369c4c4e/characters/svg/42.svg" width="125" alt="Gopher mascot">
-
 ## About
 
 A simple user identity management microservice.
